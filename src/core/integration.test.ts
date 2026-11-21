@@ -38,7 +38,9 @@ describe('공통 모듈 경계', () => {
     const state = create().getSnapshot();
     expect(Object.isFrozen(state)).toBe(true);
     expect(Object.isFrozen(state.layout['class:A'])).toBe(true);
-    if (state.model.kind === 'class') expect(() => state.model.nodes.pop()).toThrow();
+    const model = state.model;
+    if (model.kind !== 'class') throw new Error('클래스 예제가 필요합니다.');
+    expect(() => model.nodes.pop()).toThrow();
   });
   it('GUI 결과를 코드 입력으로 되돌려도 이벤트가 추가되지 않는다', () => {
     const store = create();
