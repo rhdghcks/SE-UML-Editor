@@ -48,8 +48,9 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove }
   const rows = model.kind === 'sequence' ? sequenceRows(model.steps) : [];
   const maxNodeX = Math.max(800, ...Object.values(layout).map((node) => node.x + node.width + 60));
   const width = Math.max(900, maxNodeX);
+  const firstRow = Math.max(200, ...Object.values(layout).map(node => node.y + node.height + 60));
   const height = model.kind === 'sequence'
-    ? Math.max(460, 200 + rows.length * 65)
+    ? Math.max(460, firstRow + rows.length * 65)
     : Math.max(480, ...Object.values(layout).map((node) => node.y + node.height + 100));
 
   const position = (id: string): NodeLayout | undefined => {
@@ -68,14 +69,18 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove }
   const moveDrag = (event: PointerEvent<SVGGElement>) => {
     const start = dragStart.current;
     if (!start || !svg.current) return;
-    const box = svg.current.getBoundingClientRect();
-    const x = start.initialX + (event.clientX - start.clientX) * (width / box.width);
-    const y = start.initialY + (event.clientY - start.clientY) * (height / box.height);
+    const transform = svg.current.getScreenCTM();
+    if (!transform) return;
+    const inverse = transform.inverse();
+    const startPoint = new DOMPoint(start.clientX, start.clientY).matrixTransform(inverse);
+    const pointer = new DOMPoint(event.clientX, event.clientY).matrixTransform(inverse);
+    const x = Math.max(0, start.initialX + pointer.x - startPoint.x);
+    const y = Math.max(0, start.initialY + pointer.y - startPoint.y);
     setPreview({ id: start.id, x: Math.round(x), y: Math.round(y) });
   };
 
   const finishDrag = () => {
-    if (dragStart.current && preview && preview.id === dragStart.current.id) {
+    if (!disabled && dragStart.current && preview && preview.id === dragStart.current.id) {
       const original = layout[preview.id];
       if (original && (original.x !== preview.x || original.y !== preview.y)) {
         onMove(preview.id, preview.x, preview.y);
@@ -117,7 +122,7 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove }
           stroke="#9da7b6" strokeDasharray="6 5" strokeWidth="1.5" />;
       })}
       {model.kind === 'sequence' && rows.map((row, index) => {
-        const y = 200 + index * 65;
+        const y = firstRow + index * 65;
         if (!row.from || !row.to) return <text key={index} x="30" y={y}
           fontSize="16" fill="#6c7291">{'  '.repeat(row.depth)}{row.text}</text>;
         const from = position(row.from);
