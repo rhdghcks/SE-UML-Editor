@@ -20,7 +20,7 @@ export class DiagramStore implements IDiagramEditor {
     const { code, layout: saved } = readLayoutMetadata(source);
     const model = this.parser.parse(code);
     validateModel(model);
-    const previous: LayoutMap = origin === 'code' && model.kind === this.valid.model.kind
+    const previous: LayoutMap = (origin === 'code' || origin === 'gui') && model.kind === this.valid.model.kind
       ? this.valid.layout : {};
     const layout = this.engine.layout(model, structuredClone({ ...previous, ...saved }));
     validateLayout(model, layout);
@@ -68,6 +68,16 @@ export class DiagramStore implements IDiagramEditor {
     const next = this.parse(source, 'file', this.snapshot.revision + 1);
     this.past.length = this.future.length = 0;
     this.publish(next);
+  };
+
+  addNode = (name: string) => {
+    if (this.snapshot.error) throw new Error('코드 오류를 수정한 뒤 편집하세요.');
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error('영문 식별자를 입력하세요.');
+    const keyword = this.valid.model.kind === 'class' ? 'class' : 'participant';
+    if (Object.hasOwn(this.valid.layout, `${keyword}:${name}`)) throw new Error('이미 사용 중인 이름입니다.');
+    const { code } = readLayoutMetadata(this.valid.source);
+    const next = this.parse(`${code}\n  ${keyword} ${name}`, 'gui', this.snapshot.revision + 1);
+    this.commit({ ...next, source: writeLayoutMetadata(next.source, next.layout) });
   };
 
   private updateNode(id: string, change: Partial<NodeLayout>) {

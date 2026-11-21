@@ -40,6 +40,7 @@ export function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const currentNode = selected ? snapshot.layout[selected] : undefined;
 
+  const [nodeName, setNodeName] = useState('');
   const [standard, setStandard] = useState(false);
   const [fileError, setFileError] = useState('');
   const request = useRef(0);
@@ -75,6 +76,18 @@ export function App() {
       <button disabled={Boolean(snapshot.error)} onClick={() => void files.write(store.getPersistedSource()).catch(error => setFileError(String(error)))}>파일 저장</button>
       {fileError && <span role="alert">{fileError}</span>}
       <button onClick={() => setStandard(!standard)}>{standard ? '편집 캔버스' : 'Mermaid 미리보기'}</button>
+      <form onSubmit={event => {
+        event.preventDefault();
+        try {
+          store.addNode(nodeName);
+          setNodeName('');
+          setFileError('');
+        } catch (error) { setFileError(String(error)); }
+      }}>
+        <input aria-label="새 객체 이름" placeholder="새 객체 이름" value={nodeName}
+          onChange={event => setNodeName(event.target.value)} />
+        <button disabled={!nodeName || Boolean(snapshot.error)}>객체 추가</button>
+      </form>
       <span>revision {snapshot.revision} · {snapshot.model.kind === 'class' ? 'Class' : 'Sequence'}</span>
     </div>
     <div className="workspace">

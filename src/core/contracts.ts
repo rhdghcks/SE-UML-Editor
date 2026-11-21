@@ -37,6 +37,7 @@ export interface ISnapStrategy {
 export interface IDiagramEditor extends IDiagramStore {
   openSource(source: string): void;
   updateSource(source: string): void;
+  addNode(name: string): void;
   moveNode(id: string, x: number, y: number): void;
   resizeNode(id: string, width: number, height: number): void;
   setNodeColor(id: string, color: string): void;
