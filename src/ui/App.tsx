@@ -11,15 +11,24 @@ import { DiagramCanvas } from './DiagramCanvas';
 import { CodeEditor } from './CodeEditor';
 
 // 예제 데이터 2종
-const CLASS_EXAMPLE = `classDiagram
+const CLASS_EXAMPLE = `
+classDiagram
   class User {
     +name: string
     +login()
   }
   class Session
-  User --> Session : creates`;
+  User --> Session : creates
+  Session -- s1
+  s1 -- s2
+  s2 -- s3
+  s3 -- s4
+  s4 -- s5
+  s5 -- s6
+  `;
 
-const SEQUENCE_EXAMPLE = `sequenceDiagram
+const SEQUENCE_EXAMPLE = `
+  sequenceDiagram
   participant User
   participant Server
   User->>Server: login()
@@ -30,7 +39,8 @@ const SEQUENCE_EXAMPLE = `sequenceDiagram
     User->>Server: getProfile()
   else expired
     Server-->>User: unauthorized
-  end`;
+  end
+  `;
 
 //
 const store = new DiagramStore(new BasicMermaidParser(), new GridLayout(), SEQUENCE_EXAMPLE);
