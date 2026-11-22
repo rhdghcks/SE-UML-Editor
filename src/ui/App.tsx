@@ -8,6 +8,9 @@ import { MermaidRenderer } from '../adapters/mermaid-renderer';
 import { LocalFileManager } from '../adapters/local-file-manager';
 import { DiagramCanvas } from './DiagramCanvas';
 
+import { CodeEditor } from './CodeEditor';
+
+// 예제 데이터 2종
 const CLASS_EXAMPLE = `classDiagram
   class User {
     +name: string
@@ -29,7 +32,10 @@ const SEQUENCE_EXAMPLE = `sequenceDiagram
     Server-->>User: unauthorized
   end`;
 
+//
 const store = new DiagramStore(new BasicMermaidParser(), new GridLayout(), SEQUENCE_EXAMPLE);
+
+//다이어그램 색상 선택지
 const COLORS = ['#000000', '#ffffff', '#e8eefb', '#dff2e5', '#fff0ce', '#f9dfdf', '#e9ddf7'];
 
 const files = new LocalFileManager();
@@ -56,6 +62,10 @@ export function App() {
       setFileError('');
     } catch (error) { if (ticket === request.current) setFileError(String(error)); }
   };
+
+  //에러 줄 번호
+  const errorLine = snapshot.error
+    ? Number(snapshot.error.match(/^(\d+)행:/)?.[1]) || null : null;
 
   return <main className="app">
     <header className="app-header">
@@ -90,15 +100,15 @@ export function App() {
       </form>
       <span>revision {snapshot.revision} · {snapshot.model.kind === 'class' ? 'Class' : 'Sequence'}</span>
     </div>
+
+    {/* 작업 화면 */}
     <div className="workspace">
-      <section className="code-panel">
-        <div className="panel-heading">Mermaid 코드</div>
-        <textarea spellCheck="false" aria-label="Mermaid 코드"
-          value={snapshot.source} onChange={(event) => store.updateSource(event.target.value)} />
-        <div className={snapshot.error ? 'feedback error' : 'feedback'}>
-          {snapshot.error ?? '코드가 유효합니다. 캔버스에서 노드를 드래그해 보세요.'}
-        </div>
-      </section>
+
+      {/* 코드 편집 영역 */}
+      <CodeEditor source={snapshot.source} error={snapshot.error} onChange={store.updateSource}
+      />
+
+      {/* 캔버스 영역 */}
       <section className="canvas-panel">
         <div className="panel-heading">캔버스 (개발용 미리보기)</div>
         {standard ? <MermaidPreview document={snapshot} renderer={renderer} /> : <DiagramCanvas document={snapshot} disabled={Boolean(snapshot.error)}
