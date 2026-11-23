@@ -10,10 +10,14 @@ export class GridLayout implements ILayoutEngine {
       if (Object.hasOwn(previous, id)) result[id] = { ...previous[id], placement: previous[id].placement ?? 'manual' };
     }
     let slot = 0;
+    let nextLane = 60;
     for (const id of ids) {
-      if (result[id]) continue;
+      if (result[id]) {
+        nextLane = Math.max(nextLane, result[id].x + result[id].width + 80);
+        continue;
+      }
       const sequence = model.kind === 'sequence';
-      let x = 60 + (sequence ? slot : slot % 3) * 250;
+      let x = sequence ? nextLane : 60 + (slot % 3) * 250;
       let y = 70 + (sequence ? 0 : Math.floor(slot / 3) * 190);
       const width = sequence ? 170 : 190;
       const height = sequence ? 70 : 112;
@@ -25,6 +29,7 @@ export class GridLayout implements ILayoutEngine {
         }
       }
       result[id] = { x, y, width, height, color: '#ffffff', placement: 'auto' };
+      nextLane = x + width + 80;
       slot++;
     }
     return result;

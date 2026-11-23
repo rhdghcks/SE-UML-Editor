@@ -1,3 +1,4 @@
+import { readRoutes, routeKeys } from '../core/manual-routes';
 import { useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 import type {
@@ -45,6 +46,10 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove }
   const [preview, setPreview] = useState<{ id: string; x: number; y: number } | null>(null);
   const { model, layout } = document;
   const nodes = model.kind === 'class' ? model.nodes : model.participants;
+  // 오류 초안은 마지막 정상 모델과 함께 전달되므로 경로도 정상 소스에서 읽는다.
+  const routes = useRef(new Map<string, { x: number; y: number }[]>());
+  if (!disabled && model.kind === 'class') routes.current = readRoutes(document.source);
+  const keys = model.kind === 'class' ? routeKeys(model.relations) : [];
   const rows = model.kind === 'sequence' ? sequenceRows(model.steps) : [];
   const maxNodeX = Math.max(800, ...Object.values(layout).map((node) => node.x + node.width + 60));
   const width = Math.max(900, maxNodeX);
@@ -99,7 +104,7 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove }
         </marker>
       </defs>
       <rect x="0" y="0" width={width} height={height} fill="#ffffff" />
-      {model.kind === 'class' && model.relations.map((relation) => {
+      {model.kind === 'class' && model.relations.map((relation, index) => {
         const from = position(relation.from);
         const to = position(relation.to);
         if (!from || !to) return null;
@@ -108,7 +113,8 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove }
         const x2 = to.x + to.width / 2;
         const y2 = to.y + to.height / 2;
         return <g key={relation.id}>
-          <line x1={x1} y1={y1} x2={x2} y2={y2}
+          <polyline fill="none" points={[{ x: x1, y: y1 }, ...(routes.current.get(keys[index]) ?? []),
+            { x: x2, y: y2 }].map(p => `${p.x},${p.y}`).join(' ')}
             stroke="#596579" strokeWidth="2" markerEnd="url(#arrow)" />
           <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 8}
             fontSize="15" textAnchor="middle" fill="#394253">{relation.label}</text>

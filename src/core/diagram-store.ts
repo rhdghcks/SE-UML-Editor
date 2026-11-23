@@ -1,6 +1,7 @@
+import { mergeRoutes } from './manual-routes';
 import type { IDiagramEditor, ILayoutEngine, IParser, ISnapStrategy } from './contracts';
 import { readLayoutMetadata, writeLayoutMetadata } from './layout-metadata';
-import type { EditorSnapshot, LayoutMap, NodeLayout } from './types';
+import type { ClassDiagram, EditorSnapshot, LayoutMap, NodeLayout } from './types';
 import { freezeSnapshot, validateLayout, validateModel } from './validation';
 
 export class DiagramStore implements IDiagramEditor {
@@ -12,7 +13,8 @@ export class DiagramStore implements IDiagramEditor {
   private readonly listeners = new Set<() => void>();
 
   constructor(private readonly parser: IParser, private readonly engine: ILayoutEngine,
-    source: string, private readonly snap?: ISnapStrategy) {
+    source: string, private readonly snap?: ISnapStrategy,
+    private readonly arrange?: (model: ClassDiagram, boxes: LayoutMap, added: string[]) => Promise<LayoutMap>) {
     this.snapshot = this.parse(source, 'init', 0);
     this.valid = this.snapshot;
   }
@@ -21,6 +23,10 @@ export class DiagramStore implements IDiagramEditor {
     const { code, layout: saved } = readLayoutMetadata(source);
     const model = this.parser.parse(code);
     validateModel(model);
+    if (model.kind === 'class') {
+      const carry = (origin === 'code' || origin === 'gui') && this.valid.model.kind === 'class';
+      source = mergeRoutes(source, carry ? this.valid.source : '', model.relations);
+    }
     const previous: LayoutMap = (origin === 'code' || origin === 'gui') && model.kind === this.valid.model.kind
       ? this.valid.layout : {};
     const merged = { ...previous, ...saved };
@@ -37,7 +43,22 @@ export class DiagramStore implements IDiagramEditor {
       source = source.replace(/^[^\S\r\n]*%% @se-uml-layout [^\r\n]*/m, () => marker);
     }
     validateLayout(model, layout);
-    return freezeSnapshot(structuredClone({ source, model, layout, error: null, origin, revision }));
+    const next = freezeSnapshot(structuredClone({ source, model, layout, error: null, origin, revision }));
+    const added = Object.keys(layout).filter(id => !Object.hasOwn(merged, id));
+    if (this.arrange && model.kind === 'class' && added.length) {
+      const arrange = this.arrange;
+      void Promise.resolve().then(async () => {
+        if (this.snapshot.model !== next.model) return;
+        const arranged = await arrange(model, next.layout, added);
+        if (this.snapshot.model !== next.model || this.snapshot.revision !== revision) return;
+        validateLayout(model, arranged);
+        const current = this.snapshot;
+        const updated = readLayoutMetadata(current.source).layout
+          ? writeLayoutMetadata(current.source, arranged) : current.source;
+        this.publish({ ...current, layout: arranged, source: updated, revision: revision + 1 });
+      }).catch(error => console.warn('클래스 자동 배치 실패. 기본 배치를 유지합니다.', error));
+    }
+    return next;
   }
 
   getSnapshot = () => this.snapshot;
