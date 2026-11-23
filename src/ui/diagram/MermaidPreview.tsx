@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { DiagramDocument } from '../core/types';
-import type { IRenderer } from '../core/contracts';
+import type { DiagramDocument } from '../../core/types';
+import type { IRenderer } from '../../core/contracts';
 
 export function MermaidPreview({ document, renderer }: { document: DiagramDocument; renderer: IRenderer<string> }) {
   const [result, setResult] = useState<{ url?: string; error?: string }>({});
