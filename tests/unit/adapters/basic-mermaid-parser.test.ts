@@ -23,7 +23,7 @@ const asBlock = (step: SequenceDiagram['steps'][number]): SequenceBlock => {
 };
 
 describe('starter Mermaid adapters', () => {
-  it('parses class declarations, members and relationships', () => {
+  it('parses class declarations, members and relationships [SPEC-1.3]', () => {
     const model = parser.parse(`classDiagram
 class User {
 +name: string
@@ -38,7 +38,7 @@ User --> Account : uses`);
     expect(parser.parse(serializer.serialize(model))).toEqual(model);
   });
 
-  it('parses nested sequence blocks', () => {
+  it('parses nested sequence blocks [SPEC-1.3]', () => {
     const model = parser.parse(`sequenceDiagram
 participant A
 participant B
@@ -56,19 +56,19 @@ end`);
     expect(parser.parse(serializer.serialize(model))).toEqual(model);
   });
 
-  it('rejects unsupported syntax instead of dropping it', () => {
+  it('rejects unsupported syntax instead of dropping it [SPEC-1.2]', () => {
     expect(() => parser.parse('sequenceDiagram\npar A')).toThrow('2행');
     expect(() => parser.parse('sequenceDiagram\nend')).toThrow('2행');
   });
 
-  it('rejects corrupt saved layout comments', () => {
+  it('rejects corrupt saved layout comments [SPEC-5.2]', () => {
     expect(() => readLayoutMetadata('classDiagram\n%% @se-uml-layout nope'))
       .toThrow('JSON');
     expect(() => readLayoutMetadata('classDiagram\n%% @se-uml-layout {"version":2,"nodes":{}}'))
       .toThrow('버전');
   });
 
-  it('keeps Mermaid text unchanged when attaching layout metadata', () => {
+  it('keeps Mermaid text unchanged when attaching layout metadata [SPEC-3.2]', () => {
     const source = 'classDiagram\n  class A';
     const metadata = writeLayoutMetadata(source, { 'class:A': {
       x: 10, y: 20, width: 200, height: 120, color: '#ffffff',
@@ -80,7 +80,7 @@ end`);
 });
 
 // 수행 목적: 스모크. App.tsx의 초기 예제와 같은 입력이다. 이 둘이 깨지면 첫 화면이 열리지 않는다.
-describe('smoke: 앱 기본 예제', () => {
+describe('smoke: 앱 기본 예제 [SPEC-1.3]', () => {
   it('클래스 예제를 파싱한다', () => {
     const model = asClass(parser.parse(`classDiagram
   class User {
@@ -112,12 +112,12 @@ describe('smoke: 앱 기본 예제', () => {
 });
 
 // 설계 관점: 블랙박스(동등 분할 + 경계값). 입력 영역별로 유효·무효 클래스와 경계를 표로 나눈다.
-describe('블랙박스: 헤더와 입력 전처리', () => {
+describe('블랙박스: 헤더와 입력 전처리 [SPEC-1.3]', () => {
   it.each([
     ['빈 문자열', ''],
     ['공백만', '   \n\t\n'],
     ['주석만', '%% only comment\n%% another'],
-  ])('내용이 없으면 거부한다: %s', (_, source) => {
+  ])('내용이 없으면 거부한다: %s [SPEC-1.2]', (_, source) => {
     expect(() => parser.parse(source)).toThrow('비어 있습니다');
   });
 
@@ -126,7 +126,7 @@ describe('블랙박스: 헤더와 입력 전처리', () => {
     ['헤더 오타', 'classDiagram-v2', '1행'],
     ['초기화 지시문', '%%{init: {}}%%\nclassDiagram', '1행'],
     ['빈 줄 뒤 잘못된 헤더', '\n\nerDiagram', '3행'],
-  ])('지원 헤더가 아니면 행 번호와 함께 거부한다: %s', (_, source, line) => {
+  ])('지원 헤더가 아니면 행 번호와 함께 거부한다: %s [SPEC-1.2]', (_, source, line) => {
     expect(() => parser.parse(source)).toThrow(line);
   });
 
@@ -149,7 +149,7 @@ describe('블랙박스: 헤더와 입력 전처리', () => {
   });
 });
 
-describe('블랙박스: 식별자', () => {
+describe('블랙박스: 식별자 [SPEC-1.3]', () => {
   it.each(['A', '_a', 'A1', 'a_b_C9', '__proto__', 'constructor'])('유효 식별자 %s', (name) => {
     const model = asClass(parser.parse(`classDiagram\nclass ${name}`));
     expect(model.nodes).toEqual([
@@ -157,12 +157,12 @@ describe('블랙박스: 식별자', () => {
     ]);
   });
 
-  it.each(['1A', '사용자', 'A-B', 'A.B'])('무효 식별자 %s 는 2행 오류', (name) => {
+  it.each(['1A', '사용자', 'A-B', 'A.B'])('무효 식별자 %s 는 2행 오류 [SPEC-1.2]', (name) => {
     expect(() => parser.parse(`classDiagram\nclass ${name}`)).toThrow('2행');
   });
 });
 
-describe('블랙박스: 클래스 관계', () => {
+describe('블랙박스: 클래스 관계 [SPEC-1.3]', () => {
   const connectors: ClassConnector[] = ['<|--', '--|>', '*--', 'o--', '-->', '--', '..>', '..|>'];
 
   it.each(connectors)('연결자 %s 를 그대로 보존한다', (connector) => {
@@ -181,7 +181,7 @@ describe('블랙박스: 클래스 관계', () => {
     expect(asClass(parser.parse(`classDiagram\n${line}`)).relations[0].label).toBe(label);
   });
 
-  it.each(['A <.. B', 'A --o B', 'A ==> B', 'A -->'])('미지원 관계 %s 는 2행 오류', (line) => {
+  it.each(['A <.. B', 'A --o B', 'A ==> B', 'A -->'])('미지원 관계 %s 는 2행 오류 [SPEC-1.2]', (line) => {
     expect(() => parser.parse(`classDiagram\n${line}`)).toThrow('2행');
   });
 
@@ -192,7 +192,7 @@ describe('블랙박스: 클래스 관계', () => {
   });
 });
 
-describe('블랙박스: 시퀀스 메시지와 참여자', () => {
+describe('블랙박스: 시퀀스 메시지와 참여자 [SPEC-1.3]', () => {
   const arrows: MessageArrow[] = ['->>', '-->>', '->', '-->'];
 
   it.each(arrows)('화살표 %s 를 구분한다', (arrow) => {
@@ -209,7 +209,7 @@ describe('블랙박스: 시퀀스 메시지와 참여자', () => {
     expect(asSequence(parser.parse(`sequenceDiagram\n${line}`)).steps[0]).toMatchObject({ text });
   });
 
-  it.each(['A->>B:', 'A->>B', 'A-x B: lost', 'A->>+B: activate'])('미지원 메시지 %s 는 2행 오류', (line) => {
+  it.each(['A->>B:', 'A->>B', 'A-x B: lost', 'A->>+B: activate'])('미지원 메시지 %s 는 2행 오류 [SPEC-1.2]', (line) => {
     expect(() => parser.parse(`sequenceDiagram\n${line}`)).toThrow('2행');
   });
 
@@ -243,7 +243,7 @@ describe('블랙박스: 시퀀스 메시지와 참여자', () => {
   });
 });
 
-describe('블랙박스: 블록 라벨', () => {
+describe('블랙박스: 블록 라벨 [SPEC-1.3]', () => {
   it.each(['alt', 'opt', 'loop'] as const)('%s 는 라벨 없이도 열 수 있다', (operator) => {
     const model = asSequence(parser.parse(`sequenceDiagram\n${operator}\nA->>B: x\nend`));
     const block = asBlock(model.steps[0]);
@@ -258,12 +258,12 @@ describe('블랙박스: 블록 라벨', () => {
   });
 
   it.each(['alternative', 'optional x', 'looping', 'elsewhere', 'endless'])(
-    '키워드로 시작하는 다른 단어 %s 는 블록으로 오인하지 않는다', (line) => {
+    '키워드로 시작하는 다른 단어 %s 는 블록으로 오인하지 않는다 [SPEC-1.2]', (line) => {
       expect(() => parser.parse(`sequenceDiagram\nalt a\n${line}\nend`)).toThrow('3행');
     });
 });
 
-describe('블랙박스: 클래스 본문 멤버', () => {
+describe('블랙박스: 클래스 본문 멤버 [SPEC-1.3]', () => {
   it.each([
     ['속성', '+name: string', 'attributes'],
     ['메서드', '+save()', 'methods'],
@@ -274,7 +274,7 @@ describe('블랙박스: 클래스 본문 멤버', () => {
     expect(node[field]).toEqual([member]);
   });
 
-  it.each(['+x;', 'class B {', '+map: Map<{}>'])('금지 문자가 든 멤버 %s 는 3행 오류', (member) => {
+  it.each(['+x;', 'class B {', '+map: Map<{}>'])('금지 문자가 든 멤버 %s 는 3행 오류 [SPEC-1.2]', (member) => {
     expect(() => parser.parse(`classDiagram\nclass A {\n${member}\n}`)).toThrow('3행');
   });
 
@@ -283,14 +283,14 @@ describe('블랙박스: 클래스 본문 멤버', () => {
     expect(node.attributes).toEqual(['+x']);
   });
 
-  it('본문 안 %%{ 지시문은 3행 오류', () => {
+  it('본문 안 %%{ 지시문은 3행 오류 [SPEC-1.2]', () => {
     expect(() => parser.parse('classDiagram\nclass A {\n%%{init}%%\n}')).toThrow('3행');
   });
 });
 
 // 설계 관점: 상태 기반. 클래스는 Outside ⇄ InClassBody,
 // 시퀀스는 블록 스택(깊이와 맨 위 연산자)이 상태다. 전이 표의 각 칸을 케이스로 만든다.
-describe('상태 기반: 클래스 본문 전이', () => {
+describe('상태 기반: 클래스 본문 전이 [SPEC-1.3]', () => {
   it('Outside → InClassBody → Outside 후 다시 선언을 받는다', () => {
     const model = asClass(parser.parse('classDiagram\nclass A {\n+x\n}\nclass B {\n+y()\n}\nA --> B'));
     expect(model.nodes.map((n) => [n.name, n.attributes, n.methods]))
@@ -311,17 +311,17 @@ describe('상태 기반: 클래스 본문 전이', () => {
     expect(node.attributes).toEqual(['A --> B']);
   });
 
-  it('Outside 에서 } 는 행 번호 오류', () => {
+  it('Outside 에서 } 는 행 번호 오류 [SPEC-1.2]', () => {
     expect(() => parser.parse('classDiagram\nclass A\n}')).toThrow('3행');
   });
 
-  it('InClassBody 에서 EOF 이면 여는 줄 번호로 오류', () => {
+  it('InClassBody 에서 EOF 이면 여는 줄 번호로 오류 [SPEC-1.2]', () => {
     expect(() => parser.parse('classDiagram\nclass X\nclass A {\n+x'))
       .toThrow(/^3행: A 클래스의 중괄호가 닫히지 않았습니다 \(class A \{\)$/);
   });
 });
 
-describe('상태 기반: 시퀀스 블록 스택 전이', () => {
+describe('상태 기반: 시퀀스 블록 스택 전이 [SPEC-1.3]', () => {
   it.each([
     ['깊이 0에서 end', 'end', '2행'],
     ['깊이 0에서 else', 'else x', '2행'],
@@ -329,7 +329,7 @@ describe('상태 기반: 시퀀스 블록 스택 전이', () => {
     ['opt 안 else', 'opt r\nelse x\nend', '3행'],
     ['alt 안 loop 위에서 else', 'alt a\nloop r\nelse x\nend\nend', '4행'],
     ['end 가 하나 더 많음', 'loop r\nend\nend', '4행'],
-  ])('잘못된 전이: %s', (_, body, line) => {
+  ])('잘못된 전이: %s [SPEC-1.2]', (_, body, line) => {
     expect(() => parser.parse(`sequenceDiagram\n${body}`)).toThrow(line);
   });
 
@@ -338,7 +338,7 @@ describe('상태 기반: 시퀀스 블록 스택 전이', () => {
     ['깊이 2 미종료는 가장 안쪽 블록을 가리킨다', 'alt a\nopt b\nA->>B: x', /^3행: opt 블록의 end가 빠졌습니다/],
     ['안쪽만 닫히면 바깥 블록을 가리킨다', 'alt a\nopt b\nA->>B: x\nend', /^2행: alt 블록의 end가 빠졌습니다/],
     ['else 뒤 미종료는 alt 를 가리킨다', 'alt a\nelse b', /^2행: alt 블록의 end가 빠졌습니다/],
-  ])('EOF 에서 스택이 남음: %s', (_, body, message) => {
+  ])('EOF 에서 스택이 남음: %s [SPEC-1.2]', (_, body, message) => {
     expect(() => parser.parse(`sequenceDiagram\n${body}`)).toThrow(message);
   });
 
@@ -384,7 +384,7 @@ end`));
 });
 
 // 검증 대상: 사용성(오류 품질). 팀 계약 "행 번호가 있는 문법 오류"를 모든 실패 경로에 대해 확인한다.
-describe('오류 품질: 행 번호와 원문', () => {
+describe('오류 품질: 행 번호와 원문 [SPEC-1.2]', () => {
   it.each([
     ['미지원 클래스 문법', 'classDiagram\n\nnamespace X', 3, 'namespace X'],
     ['미지원 시퀀스 문법', 'sequenceDiagram\nnote over A: hi', 2, 'note over A: hi'],
@@ -402,7 +402,7 @@ function escapeRegExp(text: string): string {
 }
 
 // 테스트 수준: 통합(Parser ↔ Serializer, Parser ↔ 배치 주석). 수행 목적: 회귀.
-describe('왕복: parse → serialize → parse', () => {
+describe('왕복: parse → serialize → parse [SPEC-1.3]', () => {
   const fixtures: Array<[string, string]> = [
     ['빈 클래스', 'classDiagram'],
     ['연결자 8종', `classDiagram\n${['<|--', '--|>', '*--', 'o--', '-->', '--', '..>', '..|>']
@@ -420,7 +420,7 @@ describe('왕복: parse → serialize → parse', () => {
     expect(parser.parse(serializer.serialize(model))).toEqual(model);
   });
 
-  it('배치 주석을 붙였다 떼어도 파싱 결과가 같다', () => {
+  it('배치 주석을 붙였다 떼어도 파싱 결과가 같다 [SPEC-3.2]', () => {
     const source = 'sequenceDiagram\nparticipant A\nA->>B: hi';
     const withLayout = writeLayoutMetadata(source, {
       'participant:A': { x: 0, y: 0, width: 100, height: 40, color: '#ffffff' },
@@ -428,14 +428,14 @@ describe('왕복: parse → serialize → parse', () => {
     expect(parser.parse(readLayoutMetadata(withLayout).code)).toEqual(parser.parse(source));
   });
 
-  it('배치 주석은 %% 주석이라 파서가 직접 읽어도 무시한다', () => {
+  it('배치 주석은 %% 주석이라 파서가 직접 읽어도 무시한다 [SPEC-3.2]', () => {
     const source = 'classDiagram\nclass A\n%% @se-uml-layout {"version":1,"nodes":{}}';
     expect(parser.parse(source)).toEqual(parser.parse('classDiagram\nclass A'));
   });
 });
 
 // 검증 대상: 견고성·성능. 1초 목표(입력→SVG)의 일부만 차지하는지 상한으로 확인한다. 정밀 측정이 아니다.
-describe('견고성·성능 상한', () => {
+describe('견고성·성능 상한 [SPEC-1.1]', () => {
   it('파싱은 입력 문자열을 바꾸지 않고 호출마다 독립된 모델을 만든다', () => {
     const source = 'classDiagram\nclass A {\n+x\n}';
     const first = asClass(parser.parse(source));
@@ -463,7 +463,7 @@ describe('견고성·성능 상한', () => {
     ['긴 식별자 뒤 잘못된 연결자', `classDiagram\n${'A'.repeat(50_000)} ~~ B`],
     ['긴 공백 뒤 실패', `sequenceDiagram\nA${' '.repeat(50_000)}x`],
     ['긴 메시지 텍스트 없는 콜론', `sequenceDiagram\n${'A'.repeat(50_000)}->>B`],
-  ])('정규식 역추적이 선형 시간 안에 실패한다: %s', (_, source) => {
+  ])('정규식 역추적이 선형 시간 안에 실패한다: %s [SPEC-1.2]', (_, source) => {
     const start = performance.now();
     expect(() => parser.parse(source)).toThrow('2행');
     expect(performance.now() - start).toBeLessThan(200);

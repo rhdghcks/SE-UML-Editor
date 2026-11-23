@@ -11,7 +11,12 @@ const acceptanceDir = defineBddConfig({
 export default defineConfig({
   // CI에서 test.only가 남아 있으면 실패시킨다 (docs/TESTING.md 공통 규칙 9).
   forbidOnly: Boolean(process.env.CI),
-  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }], ['list']] : 'list',
+  // reports/playwright.json은 scripts/test-trace.mjs가 추적표를 만들 때 읽는다.
+  reporter: [
+    ...(process.env.CI ? [['github'], ['html', { open: 'never' }]] as const : []),
+    ['list'],
+    ['json', { outputFile: 'reports/playwright.json' }],
+  ],
   use: { baseURL: 'http://127.0.0.1:4173', trace: 'retain-on-failure' },
   webServer: {
     command: 'npm run preview -- --host 127.0.0.1',

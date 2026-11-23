@@ -7,6 +7,7 @@ concurrency:
   cancel-in-progress: true
 
 # 테스트 레벨과 규칙: docs/TESTING.md
+# 산출물은 실행마다 커밋 SHA를 붙여 90일 보관한다. Actions 탭 → 실행 → Artifacts에서 내려받는다.
 jobs:
   # 단위 + 통합 (Vitest). 커버리지 하한선(vite.config.ts thresholds) 미달 시 실패한다.
   unit-integration:
@@ -17,13 +18,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
+          cache: npm
+      - run: npm ci
       - run: npm run typecheck
       - name: 단위 테스트
         run: npm run test:unit
       - name: 통합 테스트
         run: npm run test:integration
+      # 단위·통합 전체를 다시 실행하므로 reports/vitest.json도 이 단계의 결과가 최종본이다.
       - name: 커버리지 측정과 하한선 검사
+        if: success() || failure()
         run: npm run test:coverage
       - name: 커버리지 요약을 작업 요약에 기록
         if: always() && hashFiles('coverage/coverage-summary.json') != ''
@@ -38,11 +42,19 @@ jobs:
         if: always() && hashFiles('coverage/**') != ''
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
+          name: coverage-${{ github.sha }}
           path: coverage/
-          retention-days: 14
+          retention-days: 90
+      - name: Vitest 결과 업로드 (추적표 입력)
+        if: always() && hashFiles('reports/vitest.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-results
+          path: reports/vitest.json
+          retention-days: 7
 
   # 시스템 + 인수 (Playwright). 빌드 결과물을 preview로 띄워 실제 Chromium에서 실행한다.
+  # 두 프로젝트를 한 번에 실행해야 reports/playwright.json에 둘 다 기록된다. 한쪽이 실패해도 다른 쪽은 끝까지 실행된다.
   e2e:
     name: 시스템·인수 테스트
     runs-on: ubuntu-latest
@@ -51,20 +63,52 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
+          cache: npm
+      - run: npm ci
       - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - name: 시스템 테스트
-        run: npm run test:browser
-      - name: 인수 테스트
-        if: success() || failure()
-        run: npm run test:acceptance
+      - name: 시스템·인수 테스트
+        run: npm run test:e2e
+      - name: Playwright 결과 업로드 (추적표 입력)
+        if: always() && hashFiles('reports/playwright.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: reports/playwright.json
+          retention-days: 7
       - name: Playwright 리포트 업로드
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ github.sha }}
           path: |
             playwright-report/
             test-results/
-          retention-days: 14
+          retention-days: 90
+
+  # 요구사항 추적표. 두 테스트 job이 실패해도 결과가 있으면 만든다.
+  # SPEC 태그가 없거나 기능명세에 없는 번호를 쓴 테스트가 있으면 실패한다.
+  trace:
+    name: 요구사항 추적표
+    needs: [unit-integration, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*-results'
+          path: reports
+          merge-multiple: true
+      - name: 추적표 생성과 태그 검사
+        run: node scripts/test-trace.mjs
+      - name: 추적표 업로드
+        if: always() && hashFiles('reports/test-trace.md') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-trace-${{ github.sha }}
+          path: reports/test-trace.md
+          retention-days: 90

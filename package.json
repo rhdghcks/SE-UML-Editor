@@ -14,7 +14,8 @@
     "preview": "vite preview",
     "test:browser": "playwright test --project=system",
     "test:acceptance": "bddgen && playwright test --project=acceptance",
-    "test:e2e": "bddgen && playwright test"
+    "test:e2e": "bddgen && playwright test",
+    "test:trace": "node scripts/test-trace.mjs"
   },
   "dependencies": {
     "mermaid": "^11.12.0",

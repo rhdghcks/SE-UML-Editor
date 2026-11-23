@@ -15,7 +15,7 @@ const setup = async () => {
 };
 
 describe('App ↔ DiagramStore ↔ 어댑터 통합', () => {
-  it('객체 추가 명령이 코드와 캔버스에 함께 반영되고 Undo로 되돌아간다', async () => {
+  it('객체 추가 명령이 코드와 캔버스에 함께 반영되고 Undo로 되돌아간다 [SPEC-3.2][SPEC-5.3]', async () => {
     const { user, source, canvasNames } = await setup();
     const before = source.value;
     expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
@@ -32,7 +32,7 @@ describe('App ↔ DiagramStore ↔ 어댑터 통합', () => {
     expect(canvasNames().some(name => name?.includes('Invoice'))).toBe(false);
   });
 
-  it('중복 객체 추가는 오류를 표시하고 코드를 바꾸지 않는다', async () => {
+  it('중복 객체 추가는 오류를 표시하고 코드를 바꾸지 않는다 [SPEC-3.2]', async () => {
     const { user, source } = await setup();
     const before = source.value;
 
@@ -43,7 +43,7 @@ describe('App ↔ DiagramStore ↔ 어댑터 통합', () => {
     expect(source.value).toBe(before);
   });
 
-  it('잘못된 코드 입력 시 오류를 보이고 저장·추가를 막으며 마지막 정상 캔버스를 유지한다', async () => {
+  it('잘못된 코드 입력 시 오류를 보이고 저장·추가를 막으며 마지막 정상 캔버스를 유지한다 [SPEC-1.2]', async () => {
     const { user, source, canvasNames } = await setup();
     const nodes = canvasNames();
 

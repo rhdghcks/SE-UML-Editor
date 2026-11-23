@@ -102,16 +102,24 @@ tests/
 
 인수 시나리오가 시스템 TC와 같은 흐름을 검증하게 되면 시스템 TC를 줄인다. 대신 그 흐름에서 인수 시나리오에 없는 부분(색상, 미리보기 등)만 시스템 TC에 남긴다.
 
-### 3.4 TC ID와 추적
+### 3.4 요구사항 태그와 TC ID
 
-- **ID 형식**: `TC-<영역>-<기능명세 번호>-<두 자리 일련번호>`. 예: `TC-SYNC-3.1-01`
+모든 테스트는 단위부터 인수까지 기능명세 번호 태그(`SPEC-x.y`)를 하나 이상 가진다. 추적표는 이 태그로 자동 생성된다(3.8). 태그가 없거나 기능명세에 없는 번호를 쓴 테스트가 있으면 `npm run test:trace`와 CI가 실패한다.
+
+| 레벨 | SPEC 태그 위치 | TC ID |
+| --- | --- | --- |
+| 단위·통합 | `describe` 또는 `it` 이름 끝에 `[SPEC-1.3]`. describe에 단 태그는 안의 모든 it에 적용된다. | 붙이지 않는다. |
+| 시스템 | `test(이름, { tag: ['@SPEC-1.1', …] }, fn)` | 이름 앞에 `[TC-…]` |
+| 인수 | 시나리오 태그 `@SPEC-3.1` | 시나리오 태그 맨 앞에 `@TC-…` |
+
+- **태그 고르는 법**:
+  - 그 테스트의 assertion이 실제로 확인하는 기능 번호를 단다. 사전 조건으로만 거쳐 가는 기능은 달지 않는다.
+  - 한 테스트가 여러 기능을 확인하면 여러 개 단다. 예: `[SPEC-3.2][SPEC-5.3]`
+  - 파서처럼 지원 범위(1.3)와 오류 처리(1.2)가 섞인 묶음은 describe에 `[SPEC-1.3]`, 오류를 검사하는 it에 `[SPEC-1.2]`를 추가로 단다.
+- **TC ID 형식**: `TC-<영역>-<기능명세 번호>-<두 자리 일련번호>`. 예: `TC-SYNC-3.1-01`
   - 영역은 기능명세의 모듈 코드(CODE, CANVAS, SYNC, STYLE, FILE, EXPORT, CMN)를 쓴다.
-- **ID가 필요한 범위**: 시스템 TC와 인수 TC만 ID를 붙이고 [TEST_CASES.md](TEST_CASES.md)에 등록한다.
-  - 단위·통합 TC는 개수가 많아 ID를 붙이지 않는다. 테스트 코드의 describe 분류와 이름이 명세 역할을 한다.
-- **ID 표기 위치**:
-  - 시스템 TC: `test()` 이름 앞에 `[TC-…]`를 붙인다.
-  - 인수 TC: 시나리오 태그에 `@TC-…`를 요구사항 태그와 함께 단다.
-- **여러 기능을 지나가는 흐름**: 가장 중심이 되는 기능 번호로 ID를 만든다. 나머지 기능 번호는 TEST_CASES.md의 `관련 기능` 열에 적는다.
+  - 시스템·인수 TC는 [TEST_CASES.md](TEST_CASES.md)에 절차와 기대 결과를 함께 등록한다.
+- **여러 기능을 지나가는 흐름**: 가장 중심이 되는 기능 번호로 ID를 만든다. 나머지 기능은 SPEC 태그로 연결한다.
 - **번호 재사용 금지**: 삭제한 TC의 번호는 다시 쓰지 않는다.
 
 ### 3.5 우선순위
@@ -141,7 +149,26 @@ tests/
 - [ ] 수치 제약마다 경계값 세 점(n-1, n, n+1)이 있다.
 - [ ] 상태가 있는 기능은 모든 전이와 금지 전이 1개를 검사한다.
 - [ ] 이번에 고친 버그마다 회귀 TC가 있다.
+- [ ] 모든 새 테스트에 SPEC 태그를 달았고 `npm run test:trace`가 통과한다.
 - [ ] 시스템·인수 TC는 TEST_CASES.md에 등록했고, `(※확인 필요)` 항목은 미정 목록에 올렸다.
+
+### 3.8 요구사항 추적표 (자동 생성)
+
+```sh
+npm run test:coverage && npm run test:e2e   # reports/vitest.json, reports/playwright.json 생성
+npm run test:trace                          # reports/test-trace.md 생성
+```
+
+- **생성 방식**: Vitest와 Playwright가 실행할 때마다 결과를 `reports/*.json`에 남긴다. `scripts/test-trace.mjs`가 이 결과와 [FEATURE_SPEC.md](FEATURE_SPEC.md)를 합쳐 추적표를 만든다.
+- **추적표 내용**:
+  - 레벨별 통과·실패 수
+  - 요구사항(기능명세 번호, SRS 번호)별 단위·통합·시스템·인수 테스트 수와 상태
+  - 기능별 전체 테스트 목록
+- **커밋하지 않는다**: `reports/`는 .gitignore 대상이다. 최신 추적표는 CI 산출물에서 받는다.
+- **부분 실행 주의**: `test:unit`처럼 일부만 실행하면 JSON이 그 결과로 덮어써진다. 전체 추적표가 필요하면 위 두 명령을 모두 실행한 뒤 생성한다.
+- **상태 표시의 뜻**:
+  - `⚠️ 테스트 없음`: 기능이 미구현이거나 TC가 빠진 것이다.
+  - `인수 없음`: 단위·통합·시스템 테스트는 있지만 합격 기준 시나리오가 없다는 뜻이다.
 
 ## 4. 단위 테스트 (Vitest, node)
 
@@ -207,7 +234,7 @@ core는 순수 TypeScript이므로 단위 테스트는 node 환경에서 돌린�
   - `.feature` 파일은 첫 줄에 `# language: ko`를 쓰고 `기능/배경/시나리오/조건/만일/그러면/그리고`로 작성한다.
   - 시나리오 문장은 사용자가 하는 일과 보는 결과만 적는다. 버튼 이름 외의 구현 용어(Store, revision 등)는 쓰지 않는다.
 - **요구사항 추적**:
-  - 시나리오마다 TC ID, SRS 요구사항, 합격 기준, 기능명세 번호 태그를 이 순서로 단다. 예: `@TC-SYNC-3.1-02 @FR-3 @AC-3-2 @SPEC-3.1`
+  - 시나리오마다 TC ID, SRS 요구사항, 합격 기준, 기능명세 번호 태그를 이 순서로 단다. 예: `@TC-SYNC-3.1-02 @FR-3 @AC-3-2 @SPEC-3.1 @SPEC-2.1`
   - 요구사항이 바뀌면 태그로 영향받는 시나리오를 찾는다.
 - **단계 정의**:
   - 단계 정의는 `tests/acceptance/steps/`에 둔다.
@@ -225,7 +252,7 @@ core는 순수 TypeScript이므로 단위 테스트는 node 환경에서 돌린�
 npm run test:coverage   # 결과: 터미널 표, coverage/index.html, coverage/lcov.info
 ```
 
-- **측정 범위**: 단위 테스트와 통합 테스트만 측정한다(Vitest v8). 시스템·인수 테스트는 코드 커버리지 대신 요구사항 태그로 범위를 관리한다.
+- **측정 범위**: 단위 테스트와 통합 테스트만 측정한다(Vitest v8). 시스템·인수 테스트는 코드 커버리지 대신 요구사항 추적표(3.8)로 범위를 관리한다.
 - **하한선**: vite.config.ts의 `thresholds`에 있고, 미달하면 명령이 실패한다.
 
   | 범위 | statements | branches | functions | lines |
@@ -250,24 +277,32 @@ npm run test:coverage
 npm run build
 npx playwright install chromium   # 처음 한 번만
 npm run test:e2e                  # 시스템 + 인수
+npm run test:trace                # 추적표 생성과 태그 검사
 ```
 
 PR 본문에는 다음을 적는다.
 - 위 명령의 **실제 결과**: 통과 수, 실패 수, 커버리지 수치
-- 추가한 테스트의 레벨과 대상 요구사항 태그
+- 추가한 테스트의 레벨과 대상 요구사항 태그, 추적표에서 바뀐 요구사항 행
 - 테스트하지 못한 범위와 그 이유
 
 ### CI (.github/workflows/verify.yml)
 
-push와 PR마다 두 job이 병렬로 실행된다. 둘 중 하나라도 실패하면 병합하지 않는다.
+push와 PR마다 두 테스트 job이 병렬로 실행되고, 끝나면 추적표 job이 실행된다. 하나라도 실패하면 병합하지 않는다.
 
-| job | 실행 내용 | 산출물 |
+| job | 실행 내용 | 산출물(90일 보관) |
 | --- | --- | --- |
-| 단위·통합 테스트와 커버리지 | typecheck → test:unit → test:integration → test:coverage(하한선 검사) | 작업 요약의 커버리지 표, `coverage-report` 아티팩트 |
-| 시스템·인수 테스트 | build → test:browser → test:acceptance | 실패 시 `playwright-report` 아티팩트(trace 포함) |
+| 단위·통합 테스트와 커버리지 | typecheck → test:unit → test:integration → test:coverage(하한선 검사) | 작업 요약의 커버리지 표, `coverage-<커밋 SHA>` |
+| 시스템·인수 테스트 | build → test:e2e(시스템과 인수를 한 번에 실행) | 실패 시 `playwright-report-<커밋 SHA>`(trace 포함) |
+| 요구사항 추적표 | 두 job의 결과 JSON → test:trace(태그 검사) | 작업 요약의 레벨별·요구사항별 표, `test-trace-<커밋 SHA>` |
 
+- **커버리지와 추적표 이력**:
+  - 실행할 때마다 산출물 이름에 커밋 SHA를 붙여 90일 보관한다.
+  - Actions 탭에서 실행을 고르면 요약 화면에서 수치를 바로 보고, Artifacts에서 리포트를 내려받는다.
+  - 90일이 지나면 삭제되므로, 제출이나 보고서에 쓸 시점의 산출물은 따로 내려받아 둔다.
 - **`.only` 검사**: CI에서는 `.only`가 남아 있으면 테스트가 실패한다. Vitest는 기본 동작으로, Playwright는 `forbidOnly` 설정으로 막는다.
-- **인수 테스트는 계속 실행**: 시스템 테스트가 실패해도 인수 테스트는 이어서 실행한다. 어떤 요구사항이 깨졌는지 함께 보기 위해서다.
+- **실패해도 끝까지 실행**:
+  - 시스템과 인수 테스트는 한 번에 실행하므로 한쪽이 실패해도 다른 쪽은 끝까지 실행된다.
+  - 추적표 job은 테스트 job이 실패해도 실행되어 어떤 요구사항이 깨졌는지 보여 준다.
 - **실패 분석**: 아티팩트의 `test-results/`에 있는 trace를 `npx playwright show-trace <파일>`로 열어 본다.
 
 ## 10. AI에게 테스트 작성을 맡길 때

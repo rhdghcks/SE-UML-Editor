@@ -4,6 +4,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   test: {
+    // reports/vitest.json은 scripts/test-trace.mjs가 추적표를 만들 때 읽는다.
+    reporters: ['default', ['json', { outputFile: 'reports/vitest.json' }]],
     projects: [
       {
         extends: true,

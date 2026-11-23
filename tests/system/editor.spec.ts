@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 
-test('[TC-CODE-1.1-01] 편집, GUI 색상, Undo, 공식 SVG 미리보기', async ({ page }) => {
+test('[TC-CODE-1.1-01] 편집, GUI 색상, Undo, 공식 SVG 미리보기', {
+  tag: ['@SPEC-1.1', '@SPEC-1.3', '@SPEC-4.1', '@SPEC-5.3'],
+}, async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '클래스 예제' }).click();
   const source = page.getByRole('textbox', { name: 'Mermaid 코드' });
