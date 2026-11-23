@@ -7,6 +7,11 @@ import { MermaidPreview } from './MermaidPreview';
 import { MermaidRenderer } from '../adapters/mermaid-renderer';
 import { LocalFileManager } from '../adapters/local-file-manager';
 import { DiagramCanvas } from './DiagramCanvas';
+import { CanvasSvgRenderer } from '../adapters/canvas-svg-renderer';
+import { SvgImageExporter, type ImageFormat } from '../adapters/svg-image-exporter';
+import { downloadBlob } from '../adapters/download-blob';
+import type { IImageExporter } from '../core/contracts';
+import { nodeIds } from '../core/types';
 
 const CLASS_EXAMPLE = `classDiagram
   class User {
@@ -34,8 +39,15 @@ const COLORS = ['#000000', '#ffffff', '#e8eefb', '#dff2e5', '#fff0ce', '#f9dfdf'
 
 const files = new LocalFileManager();
 const renderer = new MermaidRenderer();
+const defaultExporter = new SvgImageExporter(new CanvasSvgRenderer(), 2);
+const EXPORT_FILE: Record<ImageFormat, string> = { png: 'diagram.png', jpeg: 'diagram.jpg' };
 
-export function App() {
+interface AppProps {
+  exporter?: IImageExporter;
+  download?: (blob: Blob, filename: string) => void;
+}
+
+export function App({ exporter = defaultExporter, download = downloadBlob }: AppProps = {}) {
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const [selected, setSelected] = useState<string | null>(null);
   const currentNode = selected ? snapshot.layout[selected] : undefined;
@@ -64,6 +76,33 @@ export function App() {
     } catch (error) { if (ticket === request.current) setFileError(String(error)); }
   };
 
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<ImageFormat>('png');
+  const [exporting, setExporting] = useState(false);
+  const exportRequest = useRef(0);
+  const canExport = !snapshot.error && nodeIds(snapshot.model).length > 0;
+  const closeExport = () => {
+    ++exportRequest.current; // 진행 중인 내보내기 결과는 버린다.
+    setExporting(false);
+    setExportOpen(false);
+  };
+  const exportImage = async () => {
+    const ticket = ++exportRequest.current;
+    const format = exportFormat;
+    setExporting(true);
+    try {
+      const blob = await exporter.export(store.getSnapshot(), format);
+      if (ticket !== exportRequest.current) return;
+      download(blob, EXPORT_FILE[format]);
+      setExportOpen(false);
+      setFileError('');
+    } catch (error) {
+      if (ticket === exportRequest.current) setFileError(`이미지를 내보내지 못했습니다: ${String(error)}`);
+    } finally {
+      if (ticket === exportRequest.current) setExporting(false);
+    }
+  };
+
   return <main className="app">
     <header className="app-header">
       <div>
@@ -81,6 +120,28 @@ export function App() {
       <label className="file-input">.mmd 열기<input type="file" accept=".mmd,.txt,text/plain"
         onChange={(event) => { void openFile(event.target.files?.[0]); event.target.value = ''; }} /></label>
       <button disabled={Boolean(snapshot.error)} onClick={() => void files.write(store.getPersistedSource()).catch(error => setFileError(String(error)))}>파일 저장</button>
+      <button disabled={!canExport} onClick={() => setExportOpen(true)}>내보내기</button>
+      {exportOpen && <div className="modal-backdrop"
+        onClick={event => { if (event.target === event.currentTarget) closeExport(); }}
+        onKeyDown={event => { if (event.key === 'Escape') closeExport(); }}>
+        <div role="dialog" aria-modal="true" aria-labelledby="export-title" className="modal">
+          <h2 id="export-title">이미지 내보내기</h2>
+          <fieldset>
+            <legend>이미지 형식</legend>
+            {(['png', 'jpeg'] as const).map(format => <label key={format}>
+              <input type="radio" name="export-format" value={format} autoFocus={exportFormat === format}
+                checked={exportFormat === format} onChange={() => setExportFormat(format)} />
+              {format === 'png' ? 'PNG' : 'JPG'}
+            </label>)}
+          </fieldset>
+          <div className="modal-actions">
+            <button onClick={closeExport}>취소</button>
+            <button className="primary" disabled={!canExport || exporting} onClick={() => void exportImage()}>
+              {exporting ? '내보내는 중…' : '이미지 저장'}
+            </button>
+          </div>
+        </div>
+      </div>}
       {fileError && <span role="alert">{fileError}</span>}
       <button onClick={() => setStandard(!standard)}>{standard ? '편집 캔버스' : 'Mermaid 미리보기'}</button>
       <form onSubmit={event => {
