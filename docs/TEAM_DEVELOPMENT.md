@@ -22,6 +22,7 @@ npm run dev
 | src/adapters/basic-mermaid-*.ts | 제한된 Mermaid 문법의 파싱·직렬화 |
 | src/adapters/grid-layout.ts | 새 객체 배치 |
 | src/adapters/mermaid-renderer.ts, local-file-manager.ts | 공식 SVG 생성, 브라우저 파일 입출력 |
+| src/adapters/canvas-svg-renderer.ts, svg-image-exporter.ts, download-blob.ts | 편집 캔버스 SVG 생성, PNG·JPEG 래스터화, 이미지 다운로드 |
 | src/ui/App.tsx | 어댑터 조립, 파일 요청, 코드 입력, 툴바 |
 | src/ui/DiagramCanvas.tsx, MermaidPreview.tsx | 편집 SVG 포인터 처리, 공식 렌더러 결과 표시 |
 | tests/unit/, tests/integration/ | Vitest 단위 테스트, 모듈 연결·UI 통합 테스트(Testing Library) |
@@ -41,7 +42,7 @@ npm run dev
 | IDiagramStore | getSnapshot, subscribe, canUndo, canRedo, getPersistedSource | 동일 리비전은 동일 스냅샷 참조. 구독 해제 함수를 반환한다. |
 | IDiagramEditor | openSource/updateSource/addNode/moveNode/resizeNode/setNodeColor/undo/redo → void | 명령 하나당 성공 상태 한 번. DiagramStore 한 인스턴스가 읽기와 쓰기 계약을 구현한다. |
 | IFileManager | read(Blob) → Promise<string>, write(source) → Promise<void> | 파일 선택은 UI 소유. 쓰기 성공은 브라우저에 다운로드를 요청했다는 뜻이다. |
-| IImageExporter | export(document, 'png' 또는 'jpeg') → Promise<Blob> | 현재 계약만 있다. JPEG 흰 배경, MIME 및 해상도 검증을 구현 PR에 포함한다. |
+| IImageExporter | export(document, 'png' 또는 'jpeg') → Promise<Blob> | SvgImageExporter가 IRenderer<string>(CanvasSvgRenderer)의 SVG를 canvas에 2배로 그린다. JPEG는 흰 배경. 크기 0·로드 실패·toBlob 실패는 reject. 파일 저장은 UI가 downloadBlob으로 한다. |
 | ISnapStrategy | snap(point, id, layout) → LayoutChange | 동기 좌표 변환. Store 생성자의 선택적 네 번째 인수다. |
 
 ## 타입과 구현 예제
