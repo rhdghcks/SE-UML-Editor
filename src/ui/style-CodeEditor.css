@@ -1,0 +1,78 @@
+/* 코드 입력 영역 스타일 */
+
+.code-editor {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  max-height: 600px;
+  overflow: hidden;
+
+  font-family: Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.5;
+
+}
+
+.line-numbers,
+.code-editor textarea {
+  padding: 5px;
+}
+
+.line-numbers {
+  width: 35px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+
+  text-align: right;
+  user-select: none;
+
+  /* 글자색 */
+  color: #888;
+  /* 배경색 */
+  background: #f3f4f6;
+
+  border-right: 1px solid #ddd;
+
+  resize: none;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.line-numbers .error-line {
+  background: #fee2e2;
+  color: #dc2626;
+  font-weight: bold;
+  margin-left: -8px;
+  margin-right: -8px;
+  padding-right: 8px;
+}
+
+.code-editor textarea {
+  flex: 1;
+  height: auto;
+
+  border: 0;
+  /*outline: none;*/
+  color: #253148;
+  font: inherit;
+
+  overflow: auto;
+  resize: none;
+  white-space: pre;
+  box-sizing: border-box;
+}
+
+.feedback {
+  padding: 12px 14px;
+  background: #eff7f2;
+  border-top: 1px solid #d6e9da;
+  font-size: 12px;
+  color: #2c6040;
+}
+
+.feedback.error {
+  background: #fff0f0;
+  border-color: #f1caca;
+  color: #a32929;
+}

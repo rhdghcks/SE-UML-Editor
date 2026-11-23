@@ -1,5 +1,7 @@
 import { useRef } from 'react';
 
+import './style-CodeEditor.css';
+
 interface CodeEditorProps {
   // Mermaid 코드
   source: string;
