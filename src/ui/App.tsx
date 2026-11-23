@@ -1,6 +1,8 @@
 import { useState, useSyncExternalStore } from 'react';
 import { GridLayout } from '../adapters/grid-layout';
+import { MermaidParser } from '../adapters/mermaid-parser';
 import { BasicMermaidParser } from '../adapters/basic-mermaid-parser';
+import { loadMermaidRuntime } from '../adapters/mermaid-runtime';
 import { DiagramStore } from '../core/diagram-store';
 import { useRef } from 'react';
 import { MermaidPreview } from './MermaidPreview';
@@ -29,7 +31,7 @@ const SEQUENCE_EXAMPLE = `sequenceDiagram
     Server-->>User: unauthorized
   end`;
 
-const store = new DiagramStore(new BasicMermaidParser(), new GridLayout(), SEQUENCE_EXAMPLE);
+const store = new DiagramStore(new MermaidParser(new BasicMermaidParser(), await loadMermaidRuntime()), new GridLayout(), SEQUENCE_EXAMPLE);
 const COLORS = ['#000000', '#ffffff', '#e8eefb', '#dff2e5', '#fff0ce', '#f9dfdf', '#e9ddf7'];
 
 const files = new LocalFileManager();

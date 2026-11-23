@@ -37,8 +37,8 @@ export class BasicMermaidSerializer implements ISerializer {
           lines.push(`${indent}${step.action} ${step.target.replace(/^participant:/, '')}`);
         } else {
           step.branches.forEach((branch, i) => {
-            const keyword = i === 0 ? step.operator : 'else';
-            lines.push(`${indent}${keyword} ${branch.label}`);
+            const keyword = i === 0 ? step.operator : step.operator === 'critical' ? 'option' : 'else';
+            lines.push(indent + keyword + (branch.label ? ' ' + branch.label : ''));
             appendSteps(branch.steps, `${indent}  `);
           });
           lines.push(`${indent}end`);

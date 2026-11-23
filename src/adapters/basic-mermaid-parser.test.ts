@@ -62,3 +62,11 @@ end`);
     expect(extracted.layout?.['class:A'].width).toBe(200);
   });
 });
+
+it('keeps inline class members and reports original lines for unclosed blocks', () => {
+  const model = parser.parse('classDiagram\r\n%% comment\r\nOrder : +total()');
+  expect(model.kind).toBe('class');
+  if (model.kind === 'class') expect(model.nodes[0].methods).toEqual(['+total()']);
+  expect(() => parser.parse('classDiagram\n%% comment\nclass Order {\n+total()')).toThrow('3행');
+  expect(() => parser.parse('sequenceDiagram\n%% comment\nloop retry\nA->>B: request')).toThrow('3행');
+});
