@@ -1,21 +1,17 @@
 import { useRef } from 'react';
 
-import './style-CodeEditor.css';
+import './style-CodeEditorPanel.css';
 
 interface CodeEditorProps {
   // Mermaid 코드
   source: string;
   // 에러 메시지
   error: string | null;
-  // 변경사항
+  // 내부에서 텍스트 변경시 실행할 함수
   onChange: (source: string) => void;
 }
 
-export function CodeEditor({
-  source,
-  error,
-  onChange,
-}: CodeEditorProps) {
+export function CodeEditor({ source, error, onChange }: CodeEditorProps) {
 
   // 에러 줄 번호 추출
   const errorLine = error

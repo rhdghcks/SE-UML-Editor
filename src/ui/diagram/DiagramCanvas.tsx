@@ -61,8 +61,10 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove }
   const startDrag = (event: PointerEvent<SVGGElement>, id: string) => {
     if (disabled || !layout[id]) return;
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragStart.current = { id, clientX: event.clientX, clientY: event.clientY,
-      initialX: layout[id].x, initialY: layout[id].y };
+    dragStart.current = {
+      id, clientX: event.clientX, clientY: event.clientY,
+      initialX: layout[id].x, initialY: layout[id].y
+    };
     onSelect(id);
   };
 
