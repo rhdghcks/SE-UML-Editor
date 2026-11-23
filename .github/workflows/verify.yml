@@ -2,8 +2,15 @@ name: Verify shared editor
 on: [push, pull_request]
 permissions:
   contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+# 테스트 레벨과 규칙: docs/TESTING.md
 jobs:
-  verify:
+  # 단위 + 통합 (Vitest). 커버리지 하한선(vite.config.ts thresholds) 미달 시 실패한다.
+  unit-integration:
+    name: 단위·통합 테스트와 커버리지
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -12,7 +19,52 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run typecheck
-      - run: npm run test
+      - name: 단위 테스트
+        run: npm run test:unit
+      - name: 통합 테스트
+        run: npm run test:integration
+      - name: 커버리지 측정과 하한선 검사
+        run: npm run test:coverage
+      - name: 커버리지 요약을 작업 요약에 기록
+        if: always() && hashFiles('coverage/coverage-summary.json') != ''
+        run: |
+          node -e '
+          const t = require("./coverage/coverage-summary.json").total;
+          const row = k => `| ${k} | ${t[k].pct}% | ${t[k].covered}/${t[k].total} |`;
+          console.log(["## 커버리지 (단위 + 통합)", "", "| 항목 | 비율 | 커버/전체 |", "| --- | --- | --- |",
+            ...["statements", "branches", "functions", "lines"].map(row)].join("\n"));
+          ' >> "$GITHUB_STEP_SUMMARY"
+      - name: 커버리지 리포트 업로드
+        if: always() && hashFiles('coverage/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
+
+  # 시스템 + 인수 (Playwright). 빌드 결과물을 preview로 띄워 실제 Chromium에서 실행한다.
+  e2e:
+    name: 시스템·인수 테스트
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
       - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:browser
+      - name: 시스템 테스트
+        run: npm run test:browser
+      - name: 인수 테스트
+        if: success() || failure()
+        run: npm run test:acceptance
+      - name: Playwright 리포트 업로드
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

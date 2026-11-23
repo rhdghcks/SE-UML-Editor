@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { DiagramStore } from './diagram-store';
-import { validateModel } from './validation';
-import { readLayoutMetadata } from './layout-metadata';
-import { BasicMermaidParser } from '../adapters/basic-mermaid-parser';
-import { GridLayout } from '../adapters/grid-layout';
+import { DiagramStore } from '../../../src/core/diagram-store';
+import { validateModel } from '../../../src/core/validation';
+import { readLayoutMetadata } from '../../../src/core/layout-metadata';
+import { BasicMermaidParser } from '../../../src/adapters/basic-mermaid-parser';
+import { GridLayout } from '../../../src/adapters/grid-layout';
 
 const parser = new BasicMermaidParser();
 const sample = 'classDiagram\r\n%% 팀 메모\r\nclass A  \r\n';

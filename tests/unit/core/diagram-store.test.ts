@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { GridLayout } from '../adapters/grid-layout';
-import { BasicMermaidParser } from '../adapters/basic-mermaid-parser';
-import { DiagramStore } from './diagram-store';
-import { readLayoutMetadata } from './layout-metadata';
+import { GridLayout } from '../../../src/adapters/grid-layout';
+import { BasicMermaidParser } from '../../../src/adapters/basic-mermaid-parser';
+import { DiagramStore } from '../../../src/core/diagram-store';
+import { readLayoutMetadata } from '../../../src/core/layout-metadata';
 
 const SAMPLE = `classDiagram
   class User

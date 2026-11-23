@@ -24,7 +24,8 @@ npm run dev
 | src/adapters/mermaid-renderer.ts, local-file-manager.ts | 공식 SVG 생성, 브라우저 파일 입출력 |
 | src/ui/App.tsx | 어댑터 조립, 파일 요청, 코드 입력, 툴바 |
 | src/ui/DiagramCanvas.tsx, MermaidPreview.tsx | 편집 SVG 포인터 처리, 공식 렌더러 결과 표시 |
-| src/**/*.test.ts, tests/editor.spec.ts | Vitest 단위·코어 통합 테스트, 실제 Chromium 테스트 |
+| tests/unit/, tests/integration/ | Vitest 단위 테스트, 모듈 연결·UI 통합 테스트(Testing Library) |
+| tests/system/, tests/acceptance/ | Playwright 시스템 테스트, Gherkin(.feature) 인수 테스트(playwright-bdd) |
 | docs/, AGENTS.md | 설계 결정, 개발 규칙 |
 
 ## 호출 계약
@@ -72,13 +73,15 @@ App.tsx의 생성 지점에서 `new DiagramStore(parser, layout, source, gridSna
 
 ```sh
 npm run typecheck
-npm run test
+npm run test            # 단위 + 통합 (test:unit, test:integration으로 따로 실행 가능)
+npm run test:coverage   # 단위 + 통합 커버리지, 하한선 미달 시 실패
 npm run build
 npx playwright install chromium
-npm run test:browser
+npm run test:browser    # 시스템 테스트
+npm run test:acceptance # 인수 테스트
 ```
 
-단위 테스트는 구현 옆에 같은 이름의 .test.ts로 둔다. 파서는 지원 문법·오류 행·직렬화 왕복을, 배치는 기존 위치·새 노드·삭제를 검사한다. Store 테스트에서 실패 전후의 정상 모델과 이벤트 수를 비교한다. 브라우저 테스트는 빌드 결과를 preview로 띄우므로 빌드를 먼저 실행한다. 포인터 조작, 파일 다운로드, PNG 픽셀 등 DOM·브라우저에 의존하는 결과는 Vitest 통과만으로 검증했다고 쓰지 않는다.
+테스트 레벨, 파일 위치, 모듈별 필수 검사 항목, 커버리지 하한선은 [테스트 작성 규칙](TESTING.md)을 따른다.
 
 공통 PR 병합 후 최신 main에서 `git switch -c feat/sequence-parser`처럼 담당 기능 브랜치를 만든다. 병합 전에 개발을 시작하면 공통 브랜치에서 분기하고 의존 PR을 설명에 적는다. 커밋은 기능과 해당 테스트를 묶는다. PR에는 입력 예시, 재현 방법, 검증 명령과 실제 결과, 남은 지원 범위를 적는다. 공통 PR 리뷰와 병합은 팀이 결정한다.
 
@@ -97,4 +100,4 @@ npm run test:browser
 | File Manager | “local-file-manager.ts에서 한글과 CRLF가 든 파일을 왕복해. 읽기 실패 시 열린 문서를 보존하고 비동기 오류를 표시해.” |
 | Image Exporter | “src/adapters에 IImageExporter 구현을 추가해. 수동 좌표가 적용된 이미지를 PNG/JPEG로 내보내고 MIME·크기·오류를 브라우저에서 검증해.” |
 
-모듈별 구현 수준, 객체 수 계산과 ID 유지 범위, 1초 목표의 검증 조건은 [아키텍처 문서](ARCHITECTURE.md)에 정리했다.
+모듈별 구현 수준, 객체 수 계산과 ID 유지 범위, 1초 목표의 검증 조건은 [아키텍처 문서](ARCHITECTURE.md)에, 테스트 작성 규칙은 [TESTING.md](TESTING.md)에 정리했다.
