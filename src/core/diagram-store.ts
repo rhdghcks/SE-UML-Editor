@@ -53,8 +53,8 @@ export class DiagramStore implements IDiagramEditor {
         if (this.snapshot.model !== next.model || this.snapshot.revision !== revision) return;
         validateLayout(model, arranged);
         const current = this.snapshot;
-        const updated = readLayoutMetadata(current.source).layout
-          ? writeLayoutMetadata(current.source, arranged) : current.source;
+        const updated = current.source.replace(/^[^\S\r\n]*%% @se-uml-layout [^\r\n]*/m,
+          () => writeLayoutMetadata('', arranged).trimStart());
         this.publish({ ...current, layout: arranged, source: updated, revision: revision + 1 });
       }).catch(error => console.warn('클래스 자동 배치 실패. 기본 배치를 유지합니다.', error));
     }

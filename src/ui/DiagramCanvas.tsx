@@ -51,12 +51,13 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove }
   if (!disabled && model.kind === 'class') routes.current = readRoutes(document.source);
   const keys = model.kind === 'class' ? routeKeys(model.relations) : [];
   const rows = model.kind === 'sequence' ? sequenceRows(model.steps) : [];
+  const bends = keys.flatMap(key => routes.current.get(key) ?? []);
   const maxNodeX = Math.max(800, ...Object.values(layout).map((node) => node.x + node.width + 60));
-  const width = Math.max(900, maxNodeX);
+  const width = Math.max(900, maxNodeX, ...bends.map(p => p.x + 32));
   const firstRow = Math.max(200, ...Object.values(layout).map(node => node.y + node.height + 60));
   const height = model.kind === 'sequence'
     ? Math.max(460, firstRow + rows.length * 65)
-    : Math.max(480, ...Object.values(layout).map((node) => node.y + node.height + 100));
+    : Math.max(480, ...bends.map(p => p.y + 32), ...Object.values(layout).map((node) => node.y + node.height + 100));
 
   const position = (id: string): NodeLayout | undefined => {
     const item = layout[id];

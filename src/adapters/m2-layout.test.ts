@@ -39,3 +39,20 @@ describe('M2 layout', () => {
     expect(readRoutes(store.getSnapshot().source).get(key)).toEqual(points);
   });
 });
+
+it('discards a late layout after a manual move without adding an undo step', async () => {
+  let release!: () => void;
+  const waiting = new Promise<void>(resolve => { release = resolve; });
+  const store = new DiagramStore(parser, grid, 'classDiagram\nclass A', undefined,
+    async (_model, boxes) => {
+      await waiting;
+      return { ...boxes, 'class:A': { ...boxes['class:A'], x: 999 } };
+    });
+  await Promise.resolve();
+  store.moveNode('class:A', 123, 80);
+  release();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(store.getSnapshot().layout['class:A'].x).toBe(123);
+  store.undo();
+  expect(store.canUndo()).toBe(false);
+});
