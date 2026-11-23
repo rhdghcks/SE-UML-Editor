@@ -58,7 +58,7 @@ export interface SequenceBranch {
 export interface SequenceBlock {
   id: string;
   kind: 'block';
-  operator: 'alt' | 'opt' | 'loop';
+  operator: 'alt' | 'opt' | 'loop' | 'critical';
   branches: SequenceBranch[];
 }
 
