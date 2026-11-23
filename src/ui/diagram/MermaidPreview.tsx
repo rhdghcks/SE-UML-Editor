@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { DiagramDocument } from '../../core/types';
-import type { IRenderer } from '../../core/contracts';
+import { MermaidRenderer } from '../../adapters/mermaid-renderer';
 
-export function MermaidPreview({ document, renderer }: { document: DiagramDocument; renderer: IRenderer<string> }) {
+const renderer = new MermaidRenderer();
+
+export function MermaidPreview({ document }: { document: DiagramDocument }) {
   const [result, setResult] = useState<{ url?: string; error?: string }>({});
   useEffect(() => {
     let active = true;

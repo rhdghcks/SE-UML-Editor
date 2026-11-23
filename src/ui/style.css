@@ -33,10 +33,18 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* 전체 앱의 서식 */
 .app {
-  max-width: 1500px;
-  margin: 0 auto;
+  max-width: 1600px;
+  min-height: 900px;
+  margin: auto;
   padding: 20px;
+
+  display: flex;
+  flex-direction: column;
+
+  /* 경계 확인용 임시 테두리 */
+  /*border: 1px solid #FF0000;*/
 }
 
 .app-header,
@@ -46,9 +54,6 @@ button:disabled {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-
-  /* 경계 확인용 임시 테두리 */
-  /* border: 1px solid #FF0000; */
 }
 
 .app-header h1 {
@@ -84,54 +89,53 @@ button:disabled {
   display: grid;
   grid-template-columns: minmax(320px, 0.8fr) minmax(540px, 1.5fr);
   gap: 16px;
-  min-height: 680px;
+
+  /* 자신의 내부요소가 자신을 뚫고 나오지 못하도록 제한 */
+  flex: 1;
+  min-height: 0;
+  overflow: visible;
+
+  /* 경계 확인용 임시 테두리 */
+  /*border: 1px solid #FF0000;*/
 }
 
 .code-panel,
 .canvas-panel {
   display: flex;
   flex-direction: column;
+
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+
   background: #fff;
   border: 1px solid #d8dfeb;
   border-radius: 8px;
-  overflow: hidden;
+
+  /* 경계 확인용 임시 테두리 */
+  /*border: 1px solid #FF0000;*/
 }
 
 /* 패널 제목 */
 .panel-heading {
-  padding: 13px 15px;
+  padding-inline: 15px;
   border-bottom: 1px solid #e2e6ee;
   font-weight: 600;
   font-size: 14px;
+  gap: 8px;
+
+  /* 제목 영역 내부 요소는 가로로 정렬 */
+  flex-direction: row;
+  display: flex;
+
+  align-items: center;
+}
+
+.panel-heading-text {
+  padding-block: 13px;
 }
 
 /* 다이어그램 영역 */
-.diagram-svg {
-  width: 100%;
-  min-height: 550px;
-  flex: 1;
-  touch-action: none;
-}
-
-.canvas-node {
-  cursor: grab;
-}
-
-.canvas-node:active {
-  cursor: grabbing;
-}
-
-.canvas-node.disabled {
-  cursor: not-allowed;
-}
-
-.selection-bar {
-  padding: 12px;
-  justify-content: flex-start;
-  border-top: 1px solid #e2e6ee;
-  font-size: 13px;
-  min-height: 54px;
-}
 
 .swatch {
   width: 27px;

@@ -2,10 +2,9 @@ import { useRef, useState, useSyncExternalStore } from 'react';
 import { GridLayout } from '../adapters/grid-layout';
 import { BasicMermaidParser } from '../adapters/basic-mermaid-parser';
 import { DiagramStore } from '../core/diagram-store';
-import { MermaidRenderer } from '../adapters/mermaid-renderer';
 import { LocalFileManager } from '../adapters/local-file-manager';
 
-import { CodeEditor } from './codeEditor/CodeEditorPanel';
+import { CodeEditorPanel } from './codeEditor/CodeEditorPanel';
 import { CanvasPanel } from './diagram/CanvasPanel';
 
 // 예제 데이터 2종
@@ -43,7 +42,6 @@ const SEQUENCE_EXAMPLE = `
 const store = new DiagramStore(new BasicMermaidParser(), new GridLayout(), SEQUENCE_EXAMPLE);
 
 const files = new LocalFileManager();
-const renderer = new MermaidRenderer();
 
 export function App() {
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
@@ -115,11 +113,14 @@ export function App() {
     <div className="workspace">
 
       {/* 코드 편집 영역 */}
-      <CodeEditor source={snapshot.source} error={snapshot.error} onChange={store.updateSource}
+
+      <CodeEditorPanel source={snapshot.source} error={snapshot.error} onChange={store.updateSource}
       />
 
       {/* 캔버스 영역 */}
-      <CanvasPanel snapshot={snapshot} error={snapshot.error} onMove={store.moveNode} onChangeColor={store.setNodeColor} renderer={renderer} />
+
+      <CanvasPanel snapshot={snapshot} error={snapshot.error} onMove={store.moveNode} onChangeColor={store.setNodeColor} />
+
 
     </div>
     <footer>이 화면은 팀 통합용 샘플입니다. 완전한 Mermaid 렌더러나 최종 UI가 아닙니다.</footer>

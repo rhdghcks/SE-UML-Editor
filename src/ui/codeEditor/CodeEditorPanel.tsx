@@ -11,7 +11,7 @@ interface CodeEditorProps {
   onChange: (source: string) => void;
 }
 
-export function CodeEditor({ source, error, onChange }: CodeEditorProps) {
+export function CodeEditorPanel({ source, error, onChange }: CodeEditorProps) {
 
   // 에러 줄 번호 추출
   const errorLine = error
@@ -34,12 +34,14 @@ export function CodeEditor({ source, error, onChange }: CodeEditorProps) {
     <section className="code-panel">
 
       {/* 편집 패널 제목 */}
-      <div className="panel-heading"> Mermaid 코드 </div>
+      <div className="panel-heading">
+        <div className="panel-heading-text">Mermaid 코드</div>
+      </div>
 
       {/* 코드 입력 영역 */}
       <div className="code-editor">
-
         {/* 코드 줄 표시 */}
+
         <div className="line-numbers" aria-hidden="true">
           <div ref={lineNumbersRef}>
             {source.split('\n').map((_, index) => (
@@ -59,7 +61,6 @@ export function CodeEditor({ source, error, onChange }: CodeEditorProps) {
           onChange={(event) => onChange(event.target.value)}
           onScroll={syncScroll}
         />
-
       </div>
 
       {/* 오류 메시지 */}

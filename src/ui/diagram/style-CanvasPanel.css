@@ -1,0 +1,39 @@
+.panel-heading button {
+  height: 80%;
+}
+
+.selection-bar {
+  padding: 12px;
+  justify-content: flex-start;
+  border-top: 1px solid #e2e6ee;
+  font-size: 13px;
+  min-height: 54px;
+}
+
+
+/* 다이어그램 캔버스 */
+
+.diagram-svg {
+  display: flex;
+  flex: 1;
+  overflow: scroll;
+
+  /*
+  width: 100%;
+  min-height: 0px;
+*/
+
+  touch-action: none;
+}
+
+.canvas-node {
+  cursor: grab;
+}
+
+.canvas-node:active {
+  cursor: grabbing;
+}
+
+.canvas-node.disabled {
+  cursor: not-allowed;
+}
