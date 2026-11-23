@@ -40,13 +40,15 @@ button:disabled {
 }
 
 .app-header,
-.toolbar,
-.selection-bar {
+.toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+
+  /* 경계 확인용 임시 테두리 */
+  /* border: 1px solid #FF0000; */
 }
 
 .app-header h1 {

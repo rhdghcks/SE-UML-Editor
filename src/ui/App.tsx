@@ -40,18 +40,13 @@ const SEQUENCE_EXAMPLE = `
   end
   `;
 
-//
 const store = new DiagramStore(new BasicMermaidParser(), new GridLayout(), SEQUENCE_EXAMPLE);
-
-//다이어그램 색상 선택지
-const COLORS = ['#000000', '#ffffff', '#e8eefb', '#dff2e5', '#fff0ce', '#f9dfdf', '#e9ddf7'];
 
 const files = new LocalFileManager();
 const renderer = new MermaidRenderer();
 
 export function App() {
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-  //const [selected, setSelected] = useState<string | null>(null);
 
   const [nodeName, setNodeName] = useState('');
   const [fileError, setFileError] = useState('');
@@ -65,14 +60,9 @@ export function App() {
       const source = await files.read(file);
       if (ticket !== request.current || revision !== store.getSnapshot().revision) return;
       store.openSource(source);
-      //setSelected(null);
       setFileError('');
     } catch (error) { if (ticket === request.current) setFileError(String(error)); }
   };
-
-  //에러 줄 번호
-  const errorLine = snapshot.error
-    ? Number(snapshot.error.match(/^(\d+)행:/)?.[1]) || null : null;
 
   return <main className="app">
     {/* 맨 위 UI */}
@@ -103,13 +93,6 @@ export function App() {
 
       {/* 파일 저장 버튼, 텍스트 오류시 비활성화 */}
       <button disabled={Boolean(snapshot.error)} onClick={() => void files.write(store.getPersistedSource()).catch(error => setFileError(String(error)))}>파일 저장</button>
-
-
-      {/* 캔버스 변형 버튼 */}
-      {/* 임시 비활성화 */}
-      {/*
-      <button onClick={() => setStandard(!standard)}>{standard ? '편집 캔버스' : 'Mermaid 미리보기'}</button>
-      */}
 
       {/* 객체 추가 UI */}
       <form onSubmit={event => {
