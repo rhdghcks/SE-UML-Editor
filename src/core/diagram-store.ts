@@ -31,7 +31,11 @@ export class DiagramStore implements IDiagramEditor {
       }
     }
     const layout = this.engine.layout(model, structuredClone(merged));
-    if (origin === 'code' && saved) source = writeLayoutMetadata(code, layout);
+    if (origin === 'code' && saved && Object.entries(saved).some(([id, box]) =>
+      layout[id]?.placement === 'manual' && (layout[id].x !== box.x || layout[id].y !== box.y))) {
+      const marker = writeLayoutMetadata('', layout).trimStart();
+      source = source.replace(/^[^\S\r\n]*%% @se-uml-layout [^\r\n]*/m, () => marker);
+    }
     validateLayout(model, layout);
     return freezeSnapshot(structuredClone({ source, model, layout, error: null, origin, revision }));
   }
