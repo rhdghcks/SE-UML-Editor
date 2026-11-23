@@ -43,6 +43,13 @@ export function App() {
   const [nodeName, setNodeName] = useState('');
   const [standard, setStandard] = useState(false);
   const [fileError, setFileError] = useState('');
+  const typing = useRef({ group: Symbol(), lastInput: -Infinity });
+  function editCode(source: string) {
+    const now = performance.now();
+    if (now - typing.current.lastInput > 700) typing.current.group = Symbol();
+    typing.current.lastInput = now;
+    store.updateSource(source, typing.current.group);
+  }
   const request = useRef(0);
   const openFile = async (file: File | undefined) => {
     if (!file) return;
@@ -94,7 +101,8 @@ export function App() {
       <section className="code-panel">
         <div className="panel-heading">Mermaid 코드</div>
         <textarea spellCheck="false" aria-label="Mermaid 코드"
-          value={snapshot.source} onChange={(event) => store.updateSource(event.target.value)} />
+          value={snapshot.source} onBlur={() => { typing.current.lastInput = -Infinity; }}
+          onChange={(event) => editCode(event.target.value)} />
         <div className={snapshot.error ? 'feedback error' : 'feedback'}>
           {snapshot.error ?? '코드가 유효합니다. 캔버스에서 노드를 드래그해 보세요.'}
         </div>

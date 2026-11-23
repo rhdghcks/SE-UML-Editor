@@ -4,6 +4,7 @@ import type { EditorSnapshot, LayoutMap, NodeLayout } from './types';
 import { freezeSnapshot, validateLayout, validateModel } from './validation';
 
 export class DiagramStore implements IDiagramEditor {
+  private editGroup?: symbol;
   private snapshot: EditorSnapshot;
   private valid: EditorSnapshot;
   private readonly past: EditorSnapshot[] = [];
@@ -22,7 +23,15 @@ export class DiagramStore implements IDiagramEditor {
     validateModel(model);
     const previous: LayoutMap = (origin === 'code' || origin === 'gui') && model.kind === this.valid.model.kind
       ? this.valid.layout : {};
-    const layout = this.engine.layout(model, structuredClone({ ...previous, ...saved }));
+    const merged = { ...previous, ...saved };
+    // 현재 문서에 붙여 넣은 예전 주석이 사용자의 마지막 드래그를 되돌리지 않게 한다.
+    for (const [id, box] of Object.entries(previous)) {
+      if (box.placement === 'manual' && saved?.[id]) {
+        merged[id] = { ...saved[id], x: box.x, y: box.y, placement: 'manual' };
+      }
+    }
+    const layout = this.engine.layout(model, structuredClone(merged));
+    if (origin === 'code' && saved) source = writeLayoutMetadata(code, layout);
     validateLayout(model, layout);
     return freezeSnapshot(structuredClone({ source, model, layout, error: null, origin, revision }));
   }
@@ -43,14 +52,15 @@ export class DiagramStore implements IDiagramEditor {
     for (const listener of this.listeners) listener();
   }
 
-  private commit(next: EditorSnapshot) {
-    this.past.push(this.valid);
+  private commit(next: EditorSnapshot, group?: symbol) {
+    if (!group || group !== this.editGroup) this.past.push(this.valid);
+    this.editGroup = group;
     if (this.past.length > 5) this.past.shift();
     this.future.length = 0;
     this.publish(next);
   }
 
-  updateSource = (source: string) => {
+  updateSource = (source: string, group?: symbol) => {
     if (source === this.snapshot.source) return;
     const revision = this.snapshot.revision + 1;
     let next: EditorSnapshot;
@@ -61,11 +71,12 @@ export class DiagramStore implements IDiagramEditor {
         error: error instanceof Error ? error.message : '코드를 해석할 수 없습니다.' });
       return;
     }
-    this.commit(next);
+    this.commit(next, group);
   };
 
   openSource = (source: string) => {
     const next = this.parse(source, 'file', this.snapshot.revision + 1);
+    this.editGroup = undefined;
     this.past.length = this.future.length = 0;
     this.publish(next);
   };
@@ -102,12 +113,14 @@ export class DiagramStore implements IDiagramEditor {
   canRedo = () => !this.snapshot.error && this.future.length > 0;
 
   undo = () => {
+    this.editGroup = undefined;
     const previous = this.snapshot.error ? this.valid : this.past.pop();
     if (!previous) return;
     if (!this.snapshot.error) this.future.push(this.valid);
     this.publish({ ...previous, origin: 'undo', revision: this.snapshot.revision + 1 });
   };
   redo = () => {
+    this.editGroup = undefined;
     if (!this.canRedo()) return;
     this.past.push(this.valid);
     this.publish({ ...this.future.pop()!, origin: 'redo', revision: this.snapshot.revision + 1 });
