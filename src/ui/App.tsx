@@ -13,6 +13,7 @@ import { DiagramCanvas } from './DiagramCanvas';
 import { AlignmentSnap } from '../adapters/alignment-snap';
 import { writeRoute } from '../core/route-editing';
 import { canvasEdges } from '../core/diagram-geometry';
+import { LayoutInteraction } from '../core/layout-interaction';
 
 const CLASS_EXAMPLE = `classDiagram
   class User {
@@ -36,7 +37,9 @@ const SEQUENCE_EXAMPLE = `sequenceDiagram
   end`;
 
 const snap: AlignmentSnap = new AlignmentSnap(() => store.getSnapshot());
-const store: DiagramStore = new DiagramStore(new MermaidParser(new BasicMermaidParser(), await loadMermaidRuntime()), new GridLayout(), SEQUENCE_EXAMPLE, snap, arrangeClasses);
+const interaction = new LayoutInteraction();
+const store: DiagramStore = new DiagramStore(new MermaidParser(new BasicMermaidParser(), await loadMermaidRuntime()), new GridLayout(), SEQUENCE_EXAMPLE, snap,
+  (model, boxes, added) => interaction.complete(arrangeClasses(model, boxes, added)));
 const COLORS = ['#000000', '#ffffff', '#e8eefb', '#dff2e5', '#fff0ce', '#f9dfdf', '#e9ddf7'];
 
 const files = new LocalFileManager();
@@ -142,6 +145,7 @@ export function App() {
         {standard ? <MermaidPreview document={snapshot} renderer={renderer} /> : <DiagramCanvas document={snapshot} disabled={Boolean(snapshot.error)}
           selected={selected} onSelect={setSelected} onMove={store.moveNode} onResize={store.resizeNode}
           onRouteChange={updateRoute} onError={setFileError}
+          onInteractionStart={() => interaction.begin()}
           snapNode={(point, id) => snap.snap(point, id, store.getSnapshot().layout)} />}
         <div className="selection-bar">
           {selected && currentNode ? <>

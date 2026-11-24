@@ -14,6 +14,7 @@ interface Props {
   onResize(id: string, width: number, height: number): void;
   onRouteChange(key: string, points: BendPoint[]): void;
   onError(message: string): void;
+  onInteractionStart(): () => void;
   snapNode(point: BendPoint, id: string): BendPoint;
 }
 
@@ -32,10 +33,11 @@ interface Gesture {
 }
 
 export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, onResize,
-  onRouteChange, onError, snapNode }: Props) {
+  onRouteChange, onError, onInteractionStart, snapNode }: Props) {
   const svg = useRef<SVGSVGElement>(null);
   const canvasId = useId().replace(/:/g, '');
   const gesture = useRef<Gesture | null>(null);
+  const releaseInteraction = useRef<(() => void) | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const [selectedBend, setSelectedBend] = useState<number | null>(null);
@@ -57,8 +59,16 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
   const height = Math.max(480, ...Object.values(layout).map(box => box.y + box.height + 100),
     ...points.map(p => p.y + 40), model.kind === 'sequence' ? firstSequenceRow(layout) + rows.length * 65 : 0);
 
-  function cancel() { gesture.current = null; setPreview(null); }
-  useEffect(() => { cancel(); }, [document, disabled]);
+  function releaseLayout() {
+    const release = releaseInteraction.current;
+    releaseInteraction.current = null;
+    release?.();
+  }
+  function cancel() { gesture.current = null; setPreview(null); releaseLayout(); }
+  useEffect(() => {
+    if (disabled || (gesture.current && gesture.current.document !== document)) cancel();
+  }, [document, disabled]);
+  useEffect(() => () => { gesture.current = null; releaseLayout(); }, []);
   useEffect(() => {
     if (!savedEdges.some(edge => edge.key === selectedEdge)) { setSelectedEdge(null); setSelectedBend(null); }
   }, [document, selectedEdge]);
@@ -79,6 +89,7 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
     event.stopPropagation(); event.preventDefault();
     svg.current?.focus({ preventScroll: true });
     event.currentTarget.setPointerCapture(event.pointerId);
+    releaseInteraction.current = onInteractionStart();
     gesture.current = { ...data, start, pointerId: event.pointerId, document, moved: false };
     if (data.kind === 'node' || data.kind === 'resize') {
       onSelect(data.id); setSelectedEdge(null); setSelectedBend(null);
