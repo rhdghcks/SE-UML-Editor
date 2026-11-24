@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 
 import { MermaidPreview } from './MermaidPreview';
-import { DiagramCanvas } from './DiagramCanvas';
+import { DiagramCanvas } from './Canvas/DiagramCanvas';
+import { New_DiagramCanvas } from './Canvas/new_DiagramCanvas';
 import type { EditorSnapshot } from '../../core/types';
 
 import './style-CanvasPanel.css';
@@ -63,8 +64,12 @@ export function CanvasPanel({ snapshot, error, onMove, onChangeColor }: CanvasPa
       {
         uiMode ?
           <MermaidPreview document={snapshot} /> :
-          <DiagramCanvas document={snapshot} disabled={Boolean(snapshot.error)} selected={selected} onSelect={setSelected} onMove={onMove} />
+          <New_DiagramCanvas document={snapshot} disabled={Boolean(snapshot.error)} selected={selected} onSelect={setSelected} onMove={onMove} />
       }
+
+      {/*}
+          <DiagramCanvas document={snapshot} disabled={Boolean(snapshot.error)} selected={selected} onSelect={setSelected} onMove={onMove} />
+          */}
 
       {/* 색상 선택 버튼 */}
       <div className="selection-bar">
