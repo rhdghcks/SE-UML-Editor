@@ -58,6 +58,9 @@ export function readLayoutMetadata(source: string): {
 }
 
 export function writeLayoutMetadata(source: string, layout: LayoutMap): string {
+  if (!layout || typeof layout !== 'object' || Array.isArray(layout) || !Object.values(layout).every(isNodeLayout)) {
+    throw new TypeError('저장할 배치에 잘못된 노드 좌표가 있습니다.');
+  }
   const { code } = readLayoutMetadata(source);
   const nodes: LayoutMap = Object.create(null);
   for (const id of Object.keys(layout).sort()) nodes[id] = layout[id];

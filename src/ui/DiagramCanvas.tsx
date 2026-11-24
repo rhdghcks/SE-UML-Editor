@@ -1,9 +1,9 @@
-import { readRoutes, routeKeys } from '../core/manual-routes';
-import { useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
-import type {
-  DiagramDocument, NodeLayout, SequenceStep,
-} from '../core/types';
+import type { DiagramDocument, NodeLayout } from '../core/types';
+import type { BendPoint } from '../core/manual-routes';
+import { canvasEdges, firstSequenceRow, nearestPoint, sequenceRows } from '../core/diagram-geometry';
+import type { CanvasEdge } from '../core/diagram-geometry';
 
 interface Props {
   document: DiagramDocument;
@@ -11,166 +11,232 @@ interface Props {
   selected: string | null;
   onSelect(id: string): void;
   onMove(id: string, x: number, y: number): void;
+  onResize(id: string, width: number, height: number): void;
+  onRouteChange(key: string, points: BendPoint[]): void;
+  onError(message: string): void;
+  snapNode(point: BendPoint, id: string): BendPoint;
 }
 
-interface DragStart {
+type Preview = { kind: 'node'; id: string; box: NodeLayout } |
+  { kind: 'route'; key: string; points: BendPoint[] };
+interface Gesture {
+  kind: 'node' | 'resize' | 'edge' | 'bend';
+  pointerId: number;
+  start: BendPoint;
+  document: DiagramDocument;
   id: string;
-  clientX: number;
-  clientY: number;
-  initialX: number;
-  initialY: number;
+  box?: NodeLayout;
+  edge?: CanvasEdge;
+  bend?: number;
+  moved: boolean;
 }
 
-function sequenceRows(steps: SequenceStep[], depth = 0): Array<{
-  from?: string; to?: string; text: string; depth: number;
-}> {
-  const result: Array<{ from?: string; to?: string; text: string; depth: number }> = [];
-  for (const step of steps) {
-    if (step.kind === 'message') {
-      result.push({ from: step.from, to: step.to, text: step.text, depth });
-    } else if (step.kind === 'block') {
-      for (const [index, branch] of step.branches.entries()) {
-        result.push({ text: `${index ? (step.operator === 'critical' ? 'option' : 'else') : step.operator}: ${branch.label}`, depth });
-        result.push(...sequenceRows(branch.steps, depth + 1));
-      }
-    } else {
-      result.push({ text: `${step.action}: ${step.target.replace(/^participant:/, '')}`, depth });
-    }
-  }
-  return result;
-}
-
-export function DiagramCanvas({ document, disabled, selected, onSelect, onMove }: Props) {
+export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, onResize,
+  onRouteChange, onError, snapNode }: Props) {
   const svg = useRef<SVGSVGElement>(null);
-  const dragStart = useRef<DragStart | null>(null);
-  const [preview, setPreview] = useState<{ id: string; x: number; y: number } | null>(null);
-  const { model, layout } = document;
+  const canvasId = useId().replace(/:/g, '');
+  const gesture = useRef<Gesture | null>(null);
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+  const [selectedBend, setSelectedBend] = useState<number | null>(null);
+  const validDocument = useRef(document);
+  if (!disabled) validDocument.current = document;
+  const shown = disabled ? validDocument.current : document;
+  const { model, layout } = shown;
+  const displayLayout = preview?.kind === 'node' ? { ...layout, [preview.id]: preview.box } : layout;
+  const edges = canvasEdges({ ...shown, layout: displayLayout }).map(edge =>
+    preview?.kind === 'route' && preview.key === edge.key
+      ? { ...edge, points: [edge.points[0], ...preview.points, edge.points.at(-1)!] } : edge);
+  const activeEdge = edges.find(edge => edge.key === selectedEdge);
   const nodes = model.kind === 'class' ? model.nodes : model.participants;
-  // 오류 초안은 마지막 정상 모델과 함께 전달되므로 경로도 정상 소스에서 읽는다.
-  const routes = useRef(new Map<string, { x: number; y: number }[]>());
-  if (!disabled && model.kind === 'class') routes.current = readRoutes(document.source);
-  const keys = model.kind === 'class' ? routeKeys(model.relations) : [];
   const rows = model.kind === 'sequence' ? sequenceRows(model.steps) : [];
-  const bends = keys.flatMap(key => routes.current.get(key) ?? []);
-  const maxNodeX = Math.max(800, ...Object.values(layout).map((node) => node.x + node.width + 60));
-  const width = Math.max(900, maxNodeX, ...bends.map(p => p.x + 32));
-  const firstRow = Math.max(200, ...Object.values(layout).map(node => node.y + node.height + 60));
-  const height = model.kind === 'sequence'
-    ? Math.max(460, firstRow + rows.length * 65)
-    : Math.max(480, ...bends.map(p => p.y + 32), ...Object.values(layout).map((node) => node.y + node.height + 100));
+  // A fixed viewBox during a gesture prevents the coordinate system moving under the pointer.
+  const savedEdges = canvasEdges(shown);
+  const points = savedEdges.flatMap(edge => edge.points);
+  const width = Math.max(900, ...Object.values(layout).map(box => box.x + box.width + 60), ...points.map(p => p.x + 32));
+  const height = Math.max(480, ...Object.values(layout).map(box => box.y + box.height + 100),
+    ...points.map(p => p.y + 40), model.kind === 'sequence' ? firstSequenceRow(layout) + rows.length * 65 : 0);
 
-  const position = (id: string): NodeLayout | undefined => {
-    const item = layout[id];
-    return preview?.id === id && item ? { ...item, x: preview.x, y: preview.y } : item;
-  };
-
-  const startDrag = (event: PointerEvent<SVGGElement>, id: string) => {
-    if (disabled || !layout[id]) return;
+  function cancel() { gesture.current = null; setPreview(null); }
+  useEffect(() => { cancel(); }, [document, disabled]);
+  useEffect(() => {
+    if (!savedEdges.some(edge => edge.key === selectedEdge)) { setSelectedEdge(null); setSelectedBend(null); }
+  }, [document, selectedEdge]);
+  function safely(action: () => void) {
+    try { action(); onError(''); }
+    catch (error) { onError(error instanceof Error ? error.message : String(error)); }
+  }
+  function svgPoint(clientX: number, clientY: number): BendPoint | null {
+    const matrix = svg.current?.getScreenCTM();
+    if (!matrix) return null;
+    const point = new DOMPoint(clientX, clientY).matrixTransform(matrix.inverse());
+    return Number.isFinite(point.x) && Number.isFinite(point.y) ? { x: point.x, y: point.y } : null;
+  }
+  function begin(event: PointerEvent<SVGElement>, data: Omit<Gesture, 'pointerId' | 'start' | 'document' | 'moved'>) {
+    if (disabled || event.button !== 0 || gesture.current) return;
+    const start = svgPoint(event.clientX, event.clientY);
+    if (!start) return;
+    event.stopPropagation(); event.preventDefault();
+    svg.current?.focus({ preventScroll: true });
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragStart.current = { id, clientX: event.clientX, clientY: event.clientY,
-      initialX: layout[id].x, initialY: layout[id].y };
-    onSelect(id);
-  };
-
-  const moveDrag = (event: PointerEvent<SVGGElement>) => {
-    const start = dragStart.current;
-    if (!start || !svg.current) return;
-    const transform = svg.current.getScreenCTM();
-    if (!transform) return;
-    const inverse = transform.inverse();
-    const startPoint = new DOMPoint(start.clientX, start.clientY).matrixTransform(inverse);
-    const pointer = new DOMPoint(event.clientX, event.clientY).matrixTransform(inverse);
-    const x = Math.max(0, start.initialX + pointer.x - startPoint.x);
-    const y = Math.max(0, start.initialY + pointer.y - startPoint.y);
-    setPreview({ id: start.id, x: Math.round(x), y: Math.round(y) });
-  };
-
-  const finishDrag = () => {
-    if (!disabled && dragStart.current && preview && preview.id === dragStart.current.id) {
-      const original = layout[preview.id];
-      if (original && (original.x !== preview.x || original.y !== preview.y)) {
-        onMove(preview.id, preview.x, preview.y);
-      }
+    gesture.current = { ...data, start, pointerId: event.pointerId, document, moved: false };
+    if (data.kind === 'node' || data.kind === 'resize') {
+      onSelect(data.id); setSelectedEdge(null); setSelectedBend(null);
+    } else { setSelectedEdge(data.id); setSelectedBend(data.bend ?? null); }
+  }
+  function calculate(current: Gesture, point: BendPoint): Preview {
+    const dx = point.x - current.start.x, dy = point.y - current.start.y;
+    if (current.kind === 'node' && current.box) {
+      const position = snapNode({ x: Math.round(Math.max(0, current.box.x + dx)),
+        y: Math.round(Math.max(0, current.box.y + dy)) }, current.id);
+      return { kind: 'node', id: current.id, box: { ...current.box, ...position } };
     }
-    dragStart.current = null;
-    setPreview(null);
-  };
-
-  return (
-    <svg ref={svg} className="diagram-svg" viewBox={`0 0 ${width} ${height}`}>
-      <defs>
-        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
-          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#596579" />
-        </marker>
-      </defs>
-      <rect x="0" y="0" width={width} height={height} fill="#ffffff" />
-      {model.kind === 'class' && model.relations.map((relation, index) => {
-        const from = position(relation.from);
-        const to = position(relation.to);
-        if (!from || !to) return null;
-        const x1 = from.x + from.width / 2;
-        const y1 = from.y + from.height / 2;
-        const x2 = to.x + to.width / 2;
-        const y2 = to.y + to.height / 2;
-        return <g key={relation.id}>
-          <polyline fill="none" points={[{ x: x1, y: y1 }, ...(routes.current.get(keys[index]) ?? []),
-            { x: x2, y: y2 }].map(p => `${p.x},${p.y}`).join(' ')}
-            stroke="#596579" strokeWidth="2" markerEnd="url(#arrow)" />
-          <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 8}
-            fontSize="15" textAnchor="middle" fill="#394253">{relation.label}</text>
+    if (current.kind === 'resize' && current.box) {
+      return { kind: 'node', id: current.id, box: { ...current.box,
+        width: Math.round(Math.max(80, current.box.width + dx)),
+        height: Math.round(Math.max(55, current.box.height + dy)) } };
+    }
+    const edge = current.edge!;
+    let bends = edge.points.slice(1, -1).map(p => ({ ...p }));
+    if (current.kind === 'bend' && current.bend !== undefined) {
+      bends[current.bend] = { x: Math.max(0, bends[current.bend].x + dx), y: Math.max(0, bends[current.bend].y + dy) };
+    } else {
+      if (!bends.length) {
+        const a = edge.points[0], b = edge.points.at(-1)!;
+        bends = [1 / 3, 2 / 3].map(t => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }));
+      }
+      const offsetX = Math.max(dx, -Math.min(...bends.map(p => p.x)));
+      const offsetY = Math.max(dy, -Math.min(...bends.map(p => p.y)));
+      bends = bends.map(p => ({ x: p.x + offsetX, y: p.y + offsetY }));
+    }
+    return { kind: 'route', key: edge.key, points: bends };
+  }
+  function move(event: PointerEvent<SVGSVGElement>) {
+    const current = gesture.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    if (disabled || current.document !== document) { cancel(); return; }
+    safely(() => {
+      const point = svgPoint(event.clientX, event.clientY);
+      if (!point) return;
+      current.moved ||= Math.hypot(point.x - current.start.x, point.y - current.start.y) > 0.5;
+      if (current.moved) setPreview(calculate(current, point));
+    });
+  }
+  function finish(event: PointerEvent<SVGSVGElement>) {
+    const current = gesture.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    try {
+      if (disabled || current.document !== document) return;
+      safely(() => {
+        const point = svgPoint(event.clientX, event.clientY);
+        if (!point || (!current.moved && Math.hypot(point.x - current.start.x, point.y - current.start.y) <= 0.5)) return;
+        const result = calculate(current, point);
+        if (result.kind === 'route') onRouteChange(result.key, result.points);
+        else if (current.kind === 'resize') onResize(result.id, result.box.width, result.box.height);
+        else if (result.box.x !== current.box?.x || result.box.y !== current.box?.y) onMove(result.id, result.box.x, result.box.y);
+      });
+    } finally { cancel(); }
+  }
+  function addBend(edge: CanvasEdge, point?: BendPoint) {
+    const bends = edge.points.slice(1, -1).map(p => ({ ...p }));
+    let index = 0, best = Infinity, added = edge.points[0];
+    for (let i = 1; i < edge.points.length; i++) {
+      const a = edge.points[i - 1], b = edge.points[i];
+      const candidate = point ? nearestPoint(point, a, b) : { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const score = point ? Math.hypot(candidate.x - point.x, candidate.y - point.y) : -Math.hypot(b.x - a.x, b.y - a.y);
+      if (score < best) { best = score; index = i - 1; added = candidate; }
+    }
+    bends.splice(index, 0, added);
+    safely(() => onRouteChange(edge.key, bends)); setSelectedBend(index);
+  }
+  function deleteBend() {
+    if (!activeEdge || selectedBend === null) return;
+    const bends = activeEdge.points.slice(1, -1); bends.splice(selectedBend, 1);
+    safely(() => onRouteChange(activeEdge.key, bends)); setSelectedBend(null);
+  }
+  function fitText() {
+    const node = nodes.find(item => item.id === selected);
+    if (!node) return;
+    const element = svg.current?.querySelector(`[data-node-id="${CSS.escape(node.id)}"]`);
+    const lengths = [...(element?.querySelectorAll<SVGTextElement>('text[data-content]') ?? [])].map(text => text.getComputedTextLength());
+    const count = node.kind === 'class' ? node.attributes.length + node.methods.length : 0;
+    safely(() => onResize(node.id, Math.ceil(Math.max(100, ...lengths.map(length => length + 24))),
+      node.kind === 'class' ? Math.max(75, 60 + count * 18) : 70));
+  }
+  return <div className="canvas-editor">
+    <div className="canvas-tools">
+      <span>노드: 드래그 · 오른쪽 아래 ■: 크기 조절 · 선: 드래그/더블클릭 · Esc: 취소</span>
+      <button disabled={disabled || !selected || Boolean(selectedEdge)} onClick={fitText}>텍스트에 맞추기</button>
+      <button disabled={disabled || !activeEdge} onClick={() => activeEdge && addBend(activeEdge)}>꺾임점 추가</button>
+      <button disabled={disabled || !activeEdge || selectedBend === null} onClick={deleteBend}>꺾임점 삭제</button>
+      <button disabled={disabled || !activeEdge || activeEdge.points.length === 2}
+        onClick={() => activeEdge && safely(() => { onRouteChange(activeEdge.key, []); setSelectedBend(null); })}>경로 초기화</button>
+    </div>
+    <svg ref={svg} className="diagram-svg" tabIndex={0} aria-label="다이어그램 편집 캔버스"
+      viewBox={`0 0 ${width} ${height}`} onPointerMove={move} onPointerUp={finish}
+      onPointerCancel={event => { if (gesture.current?.pointerId === event.pointerId) cancel(); }}
+      onLostPointerCapture={event => { if (gesture.current?.pointerId === event.pointerId) cancel(); }}
+      onKeyDown={event => {
+        if (event.key === 'Escape') { event.preventDefault(); cancel(); }
+        if (!disabled && event.key === 'Delete' && selectedBend !== null) { event.preventDefault(); deleteBend(); }
+      }}>
+      <defs><marker id={`${canvasId}-arrow`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#596579" /></marker></defs>
+      <rect width={width} height={height} fill="white" onPointerDown={() => { setSelectedEdge(null); setSelectedBend(null); }} />
+      {edges.map(edge => {
+        const middle = edge.points[Math.floor(edge.points.length / 2)];
+        const label = edge.points.length === 2 ? { x: (edge.points[0].x + edge.points[1].x) / 2, y: (edge.points[0].y + edge.points[1].y) / 2 } : middle;
+        const pointString = edge.points.map(p => `${p.x},${p.y}`).join(' ');
+        return <g key={edge.key} data-route-key={edge.key} className="canvas-edge"
+          onPointerDown={event => begin(event, { kind: 'edge', id: edge.key, edge })}
+          onDoubleClick={event => {
+            if (disabled) return;
+            event.stopPropagation(); const point = svgPoint(event.clientX, event.clientY);
+            if (point) addBend(edge, point);
+          }}>
+          <polyline className="edge-hit" points={pointString} fill="none" stroke="transparent" strokeWidth="14" />
+          <polyline className="edge-line" points={pointString} fill="none" stroke={selectedEdge === edge.key ? '#3367d6' : '#596579'}
+            strokeWidth="2" markerEnd={`url(#${canvasId}-arrow)`} />
+          <text x={label.x} y={label.y - 10} textAnchor="middle" fontSize="15">{edge.label}</text>
+          {selectedEdge === edge.key && edge.points.slice(1, -1).map((point, index) =>
+            <circle key={index} className="bend-handle" aria-label={`꺾임점 ${index + 1}`} cx={point.x} cy={point.y} r="7"
+              fill={selectedBend === index ? '#ffbd59' : 'white'} stroke="#3367d6" strokeWidth="2"
+              onPointerDown={event => begin(event, { kind: 'bend', id: edge.key, edge, bend: index })}
+              onDoubleClick={event => event.stopPropagation()} />)}
         </g>;
       })}
-      {model.kind === 'sequence' && model.participants.map((participant) => {
-        const item = position(participant.id);
-        if (!item) return null;
-        return <line key={`lifeline:${participant.id}`} x1={item.x + item.width / 2}
-          y1={item.y + item.height} x2={item.x + item.width / 2} y2={height - 35}
-          stroke="#9da7b6" strokeDasharray="6 5" strokeWidth="1.5" />;
+      {model.kind === 'sequence' && model.participants.map(participant => {
+        const box = displayLayout[participant.id];
+        return box && <line key={participant.id} x1={box.x + box.width / 2} y1={box.y + box.height}
+          x2={box.x + box.width / 2} y2={height - 35} stroke="#9da7b6" strokeDasharray="6 5" pointerEvents="none" />;
       })}
-      {model.kind === 'sequence' && rows.map((row, index) => {
-        const y = firstRow + index * 65;
-        if (!row.from || !row.to) return <text key={index} x="30" y={y}
-          fontSize="16" fill="#6c7291">{'  '.repeat(row.depth)}{row.text}</text>;
-        const from = position(row.from);
-        const to = position(row.to);
-        if (!from || !to) return null;
-        const x1 = from.x + from.width / 2;
-        const x2 = to.x + to.width / 2;
-        return <g key={index}>
-          <line x1={x1} y1={y} x2={x2} y2={y}
-            stroke="#596579" strokeWidth="2" markerEnd="url(#arrow)" />
-          <text x={(x1 + x2) / 2} y={y - 11} textAnchor="middle"
-            fontSize="16" fill="#303a50">{row.text}</text>
-        </g>;
-      })}
-      {nodes.map((node) => {
-        const item = position(node.id);
-        if (!item) return null;
-        const active = selected === node.id;
+      {model.kind === 'sequence' && rows.map((row, index) => !row.from &&
+        <text key={row.id} x={30 + row.depth * 12} y={firstSequenceRow(displayLayout) + index * 65} fontSize="16" pointerEvents="none">{row.text}</text>)}
+      {nodes.map((node, index) => {
+        const box = displayLayout[node.id];
+        if (!box) return null;
+        const active = selected === node.id && !selectedEdge;
         const details = node.kind === 'class' ? [...node.attributes, ...node.methods] : [];
-        return <g key={node.id}
-          className={disabled ? 'canvas-node disabled' : 'canvas-node'}
-          onPointerDown={(event) => startDrag(event, node.id)}
-          onPointerMove={moveDrag}
-          onPointerUp={finishDrag}
-          onPointerCancel={() => { dragStart.current = null; setPreview(null); }}>
-          <rect x={item.x} y={item.y} width={item.width} height={item.height}
-            rx="4" fill={item.color} stroke={active ? '#3367d6' : '#526078'}
-            strokeWidth={active ? 3 : 1.5} />
-          <text x={item.x + item.width / 2} y={item.y + 30} textAnchor="middle"
-            fontSize="20" fontWeight="600" fill={item.color === '#000000' ? '#ffffff' : '#253149'}>
-            {node.kind === 'class' ? node.name : node.displayName}
-          </text>
-          {node.kind === 'class' && <>
-            <line x1={item.x} y1={item.y + 43} x2={item.x + item.width}
-              y2={item.y + 43} stroke="#9da7b6" />
-            {details.slice(0, 3).map((line, i) =>
-              <text key={i} x={item.x + 12} y={item.y + 65 + i * 17}
-                fontSize="13" fill={item.color === '#000000' ? '#ffffff' : '#394253'}>{line}</text>)}
-          </>}
+        const clipId = `${canvasId}-node-${index}`;
+        const foreground = box.color === '#000000' ? 'white' : '#253149';
+        return <g key={node.id} data-node-id={node.id} className={disabled ? 'canvas-node disabled' : 'canvas-node'}
+          onPointerDown={event => begin(event, { kind: 'node', id: node.id, box: layout[node.id] })}>
+          <rect className="node-box" x={box.x} y={box.y} width={box.width} height={box.height} rx="4"
+            fill={box.color} stroke={active ? '#3367d6' : '#526078'} strokeWidth={active ? 3 : 1.5} />
+          <clipPath id={clipId}><path d={`M${box.x + 4},${box.y + 4}h${Math.max(1, box.width - 8)}v${Math.max(1, box.height - 8)}h${-Math.max(1, box.width - 8)}z`} /></clipPath>
+          <g clipPath={`url(#${clipId})`} pointerEvents="none">
+            <text data-content x={box.x + box.width / 2} y={box.y + 30} textAnchor="middle" fontSize="20" fontWeight="600" fill={foreground}>
+              {node.kind === 'class' ? node.name : node.displayName}</text>
+            {node.kind === 'class' && <>
+              <line x1={box.x} y1={box.y + 43} x2={box.x + box.width} y2={box.y + 43} stroke="#9da7b6" />
+              {details.map((line, i) => <text data-content key={i} x={box.x + 12} y={box.y + 65 + i * 18} fontSize="13" fill={foreground}>{line}</text>)}
+            </>}
+          </g>
+          {active && !disabled && <path className="resize-handle" aria-label={`${node.name} 크기 조절`}
+            d={`M${box.x + box.width - 12},${box.y + box.height - 12}h12v12h-12z`} fill="#3367d6"
+            onPointerDown={event => begin(event, { kind: 'resize', id: node.id, box: layout[node.id] })} />}
         </g>;
       })}
     </svg>
-  );
+  </div>;
 }
