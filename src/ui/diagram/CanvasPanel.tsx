@@ -48,7 +48,9 @@ export function CanvasPanel({ snapshot, error, onMove, onChangeColor }: CanvasPa
     <section className="canvas-panel">
       {/* 제목 텍스트 */}
       <div className="panel-heading">
-        <div className="panel-heading-text">캔버스 (개발용 미리보기)</div>
+        <div className="panel-heading-text">
+          {snapshot.model.kind == 'class' ? '클래스 다이어그램' : '시퀸스 다이어그램'}
+        </div>
 
         {/* 캔버스 변형 버튼 */}
 
