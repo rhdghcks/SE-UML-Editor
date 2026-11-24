@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 import type {
   DiagramDocument, NodeLayout, SequenceStep,
-} from '../../core/types';
+} from '../../../core/types';
 
 interface Props {
   document: DiagramDocument;

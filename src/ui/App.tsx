@@ -5,7 +5,7 @@ import { DiagramStore } from '../core/diagram-store';
 import { LocalFileManager } from '../adapters/local-file-manager';
 
 import { CodeEditorPanel } from './codeEditor/CodeEditorPanel';
-import { CanvasPanel } from './diagram/CanvasPanel';
+import { DiagramPanel } from './diagram/DiagramPanel';
 
 // 예제 데이터 2종
 const CLASS_EXAMPLE = `
@@ -113,13 +113,11 @@ export function App() {
     <div className="workspace">
 
       {/* 코드 편집 영역 */}
-
       <CodeEditorPanel source={snapshot.source} error={snapshot.error} onChange={store.updateSource}
       />
 
-      {/* 캔버스 영역 */}
-
-      <CanvasPanel snapshot={snapshot} error={snapshot.error} onMove={store.moveNode} onChangeColor={store.setNodeColor} />
+      {/* 다이어그램 표시/조작 영역 */}
+      <DiagramPanel snapshot={snapshot} disabled={Boolean(snapshot.error)} onMove={store.moveNode} onChangeColor={store.setNodeColor} />
 
 
     </div>
