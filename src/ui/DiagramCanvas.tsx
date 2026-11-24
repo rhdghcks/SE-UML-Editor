@@ -30,7 +30,7 @@ function sequenceRows(steps: SequenceStep[], depth = 0): Array<{
       result.push({ from: step.from, to: step.to, text: step.text, depth });
     } else if (step.kind === 'block') {
       for (const [index, branch] of step.branches.entries()) {
-        result.push({ text: `${index ? 'else' : step.operator}: ${branch.label}`, depth });
+        result.push({ text: `${index ? (step.operator === 'critical' ? 'option' : 'else') : step.operator}: ${branch.label}`, depth });
         result.push(...sequenceRows(branch.steps, depth + 1));
       }
     } else {

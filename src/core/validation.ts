@@ -30,7 +30,7 @@ export function validateModel(model: DiagramModel): void {
     } else if (step.kind === 'activation') {
       reference(step.target);
     } else {
-      if (!step.branches.length || (step.operator !== 'alt' && step.branches.length !== 1)) {
+      if (!step.branches.length || ((step.operator === 'opt' || step.operator === 'loop') && step.branches.length !== 1)) {
         throw new Error('시퀀스 블록의 분기 수가 올바르지 않습니다.');
       }
       for (const branch of step.branches) branch.steps.forEach(visit);

@@ -30,15 +30,13 @@ export class DiagramStore implements IDiagramEditor {
     const previous: LayoutMap = (origin === 'code' || origin === 'gui') && model.kind === this.valid.model.kind
       ? this.valid.layout : {};
     const merged = { ...previous, ...saved };
-    // 현재 문서에 붙여 넣은 예전 주석이 사용자의 마지막 드래그를 되돌리지 않게 한다.
+    // 같은 문서를 편집할 때 수동 배치한 노드의 마지막 GUI 상태를 보존한다.
     for (const [id, box] of Object.entries(previous)) {
-      if (box.placement === 'manual' && saved?.[id]) {
-        merged[id] = { ...saved[id], x: box.x, y: box.y, placement: 'manual' };
-      }
+      if (box.placement === 'manual') merged[id] = box;
     }
     const layout = this.engine.layout(model, structuredClone(merged));
-    if (origin === 'code' && saved && Object.entries(saved).some(([id, box]) =>
-      layout[id]?.placement === 'manual' && (layout[id].x !== box.x || layout[id].y !== box.y))) {
+    if (origin === 'code' && saved && (Object.keys(saved).length !== Object.keys(layout).length ||
+        Object.entries(layout).some(([id, box]) => JSON.stringify(saved[id]) !== JSON.stringify(box)))) {
       const marker = writeLayoutMetadata('', layout).trimStart();
       source = source.replace(/^[^\S\r\n]*%% @se-uml-layout [^\r\n]*/m, () => marker);
     }

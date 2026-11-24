@@ -25,6 +25,7 @@ function parseClass(lines: SourceLine[]): ClassDiagram {
   const relations: ClassRelation[] = [];
   let openClass: ClassNode | null = null;
   let relationIndex = 0;
+  let classStart = lines[0];
 
   const ensureClass = (name: string): ClassNode => {
     if (!nodes.has(name)) {
@@ -49,7 +50,19 @@ function parseClass(lines: SourceLine[]): ClassDiagram {
     const classMatch = line.text.match(new RegExp(`^class\\s+(${ID})(\\s*\\{)?$`));
     if (classMatch) {
       const node = ensureClass(classMatch[1]);
-      if (classMatch[2]) openClass = node;
+      if (classMatch[2]) {
+        openClass = node;
+        classStart = line;
+      }
+      continue;
+    }
+
+    const member = /^([A-Za-z_]\w*)\s*:\s*([^{};]+)$/.exec(line.text);
+    if (member) {
+      const node = ensureClass(member[1]);
+      const text = member[2].trim();
+      if (text.includes('(')) node.methods.push(text);
+      else node.attributes.push(text);
       continue;
     }
 
@@ -65,14 +78,14 @@ function parseClass(lines: SourceLine[]): ClassDiagram {
     }
     fail(line, '지원하지 않는 클래스 다이어그램 문법');
   }
-  if (openClass) throw new Error(`${openClass.name} 클래스의 중괄호가 닫히지 않았습니다.`);
+  if (openClass) fail(classStart, '클래스의 중괄호가 닫히지 않았습니다');
   return { kind: 'class', nodes: [...nodes.values()], relations };
 }
 
 function parseSequence(lines: SourceLine[]): SequenceDiagram {
   const participants = new Map<string, Participant>();
   const steps: SequenceStep[] = [];
-  const stack: Array<{ block: SequenceBlock; current: SequenceBranch }> = [];
+  const stack: Array<{ block: SequenceBlock; current: SequenceBranch; start: SourceLine }> = [];
   let index = 0;
   const ensureParticipant = (name: string, displayName = name,
     role?: 'participant' | 'actor') => {
@@ -117,33 +130,38 @@ function parseSequence(lines: SourceLine[]): SequenceDiagram {
       continue;
     }
 
-    const blockStart = line.text.match(/^(alt|opt|loop)\s+(.+)$/);
+    const blockStart = line.text.match(/^(alt|opt|loop|critical)\s+(.+)$/);
     if (blockStart) {
       const branch: SequenceBranch = { label: blockStart[2], steps: [] };
       const block: SequenceBlock = { id: `block:${index++}`, kind: 'block',
         operator: blockStart[1] as SequenceBlock['operator'], branches: [branch] };
       append(block);
-      stack.push({ block, current: branch });
+      stack.push({ block, current: branch, start: line });
       continue;
     }
 
-    if (line.text.startsWith('else ')) {
+    const division = /^(else|option)(?:\s+(.*))?$/.exec(line.text);
+    if (division) {
       const top = stack[stack.length - 1];
-      if (!top || top.block.operator !== 'alt') fail(line, 'else는 alt 블록 안에서만 사용할 수 있습니다');
-      const branch: SequenceBranch = { label: line.text.slice(5), steps: [] };
+      const operator = division[1] === 'else' ? 'alt' : 'critical';
+      if (!top || top.block.operator !== operator) {
+        fail(line, division[1] + '는 ' + operator + ' 블록 안에서만 사용할 수 있습니다');
+      }
+      const branch: SequenceBranch = { label: division[2] ?? '', steps: [] };
       top.block.branches.push(branch);
       top.current = branch;
       continue;
     }
 
     if (line.text === 'end') {
-      if (!stack.pop()) fail(line, '대응하는 alt/opt/loop가 없습니다');
+      if (!stack.pop()) fail(line, '대응하는 alt/opt/loop/critical가 없습니다');
       continue;
     }
 
     fail(line, '지원하지 않는 시퀀스 다이어그램 문법');
   }
-  if (stack.length) throw new Error('alt/opt/loop 블록의 end가 빠졌습니다.');
+  const unclosed = stack.at(-1);
+  if (unclosed) fail(unclosed.start, 'alt/opt/loop/critical 블록의 end가 빠졌습니다');
   return { kind: 'sequence', participants: [...participants.values()], steps };
 }
 
