@@ -29,7 +29,7 @@ it.each([
   expect(store.getSnapshot().source).toBe(edited.source);
 });
 
-it('keeps manual size and color when stale metadata returns and drops removed nodes', () => {
+it('keeps manual size and color when stale metadata returns and drops removed nodes [SPEC-3.1][SPEC-3.2]', () => {
   const store = new DiagramStore(new BasicMermaidParser(), new GridLayout(), 'classDiagram\nclass A\nclass B');
   store.moveNode('class:A', 301, 95);
   const stale = store.getPersistedSource();

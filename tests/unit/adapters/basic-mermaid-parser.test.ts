@@ -470,7 +470,7 @@ describe('견고성·성능 상한 [SPEC-1.1]', () => {
   });
 });
 
-it('keeps inline class members and reports original lines for unclosed blocks', () => {
+it('keeps inline class members and reports original lines for unclosed blocks [SPEC-1.3][SPEC-1.2]', () => {
   const model = parser.parse('classDiagram\r\n%% comment\r\nOrder : +total()');
   expect(model.kind).toBe('class');
   if (model.kind === 'class') expect(model.nodes[0].methods).toEqual(['+total()']);

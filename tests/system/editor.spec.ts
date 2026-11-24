@@ -21,7 +21,9 @@ test('[TC-CODE-1.1-01] 편집, GUI 색상, Undo, 공식 SVG 미리보기', {
   await expect(page.getByRole('img', { name: 'Mermaid 자동 배치 결과' })).toBeVisible();
 });
 
-test('Mermaid adapter updates the team canvas and reports unsupported syntax with its source line', async ({ page }) => {
+test('[TC-CODE-1.3-01] Mermaid adapter updates the team canvas and reports unsupported syntax with its source line', {
+  tag: ['@SPEC-1.3', '@SPEC-1.2'],
+}, async ({ page }) => {
   await page.goto('/');
   const editor = page.getByRole('textbox', { name: 'Mermaid 코드' });
   await editor.fill('classDiagram\nclass Order\nOrder : +total()\nOrder --> Customer : places');
@@ -38,7 +40,9 @@ test('Mermaid adapter updates the team canvas and reports unsupported syntax wit
   await expect(page.getByText('응답', { exact: true })).toBeVisible();
 });
 
-test('shows critical options in the team canvas and retains their syntax in the official preview', async ({ page }) => {
+test('[TC-CODE-1.3-02] shows critical options in the team canvas and retains their syntax in the official preview', {
+  tag: ['@SPEC-1.3'],
+}, async ({ page }) => {
   await page.goto('/');
   const code = 'sequenceDiagram\ncritical 결제 승인\ncritical 재고 확인\nA->>B: 요청\nend\noption 시간 초과\nB-->>A: 대기\noption 권한 거부\nB-->>A: 실패\nend';
   const editor = page.getByRole('textbox', { name: 'Mermaid 코드' });

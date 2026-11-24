@@ -6,8 +6,8 @@ import { validateModel } from '../../../src/core/validation';
 
 const basic = new BasicMermaidParser();
 
-describe('M1 parser contract', () => {
-  it('checks support with original line numbers before calling the Mermaid runtime', () => {
+describe('M1 parser contract [SPEC-1.3]', () => {
+  it('checks support with original line numbers before calling the Mermaid runtime [SPEC-1.2]', () => {
     let called = false;
     const parser = new MermaidParser(basic, { parse() {
       called = true;

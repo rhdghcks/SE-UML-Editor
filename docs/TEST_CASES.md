@@ -17,6 +17,11 @@
 | TC-FILE-5.3-01 | 시스템 | FR-8 | 5.3, 3.2 | P1 | 사용자 흐름 | 클래스 예제를 연 상태 | 코드 입력 → 색상 적용 → 코드 영역에서 Ctrl+Z 두 번 → Ctrl+Shift+Z 두 번 | Ctrl+Z가 GUI 편집과 코드 편집을 차례로 되돌리고, Ctrl+Shift+Z 두 번 뒤 색상 적용 상태로 돌아온다. | [file.spec.ts](../tests/system/file.spec.ts) |
 | TC-EXPORT-6.1-01 | 시스템 | FR-4 | 6.1, 2.1, 4.1 | P1 | 사용자 흐름 | `classDiagram\n  class Invoice` 입력 | Invoice에 색상 `#fff0ce` 적용 → 드래그 → 내보내기 → PNG → 이미지 저장 | `diagram.png`가 PNG 서명으로 시작하고, 크기가 캔버스의 2배이며, 드래그한 Invoice 위치의 픽셀이 `#fff0ce`다. 코드는 내보내기 전과 같다. | [export.spec.ts](../tests/system/export.spec.ts) |
 | TC-EXPORT-6.1-02 | 시스템 | FR-4 | 6.1 | P1 | 사용자 흐름 | TC-EXPORT-6.1-01과 같음 | 내보내기 → JPG → 이미지 저장 | `diagram.jpg`가 JPEG 서명(`FF D8 FF`)으로 시작하고, 크기가 캔버스의 2배이며, 모서리 픽셀이 흰색(채널 250 이상)이다. | [export.spec.ts](../tests/system/export.spec.ts) |
+| TC-CODE-1.3-01 | 시스템 | FR-5 | 1.3, 1.2 | P2 | 사용자 흐름 | 편집기를 연 상태 | 클래스 코드(`Order : +total()`, `Order --> Customer`) 입력 → alt/loop가 중첩된 시퀀스 코드 입력 → `break` 블록이 든 코드 입력 | 한 줄 멤버와 관계 대상 클래스, 별칭 참여자와 블록 라벨이 캔버스에 보인다. `break`는 `3행` 오류로 표시되고 마지막 정상 다이어그램이 유지된다. | [editor.spec.ts](../tests/system/editor.spec.ts) |
+| TC-CODE-1.3-02 | 시스템 | FR-5 | 1.3 | P2 | 사용자 흐름 | 편집기를 연 상태 | 중첩 `critical`과 `option` 두 개가 있는 시퀀스 코드 입력 → Mermaid 미리보기 → option 라벨 수정 | 캔버스에 critical·option 라벨이 모두 보이고, 미리보기 SVG에 수정 전후 라벨이 반영된다. | [editor.spec.ts](../tests/system/editor.spec.ts) |
+| TC-SYNC-3.1-03 | 시스템 | FR-3, FR-10 | 3.1, 2.3 | P1 | 사용자 흐름 | 편집기를 연 상태 | `@se-uml-route` 꺾임점이 있는 `A --> B` 코드 입력 → 코드에 `B --> C` 추가 | 간선이 저장된 꺾임점(320,350)을 지나고, 관계를 추가한 뒤에도 유지되며 노드가 3개 보인다. | [m2-layout.spec.ts](../tests/system/m2-layout.spec.ts) |
+| TC-CMN-9.2-01 | 시스템 | NFR-1, NFR-4 | 9.2, 1.1, 1.2, 5.3 | P1 | 경계값 | 편집기를 연 상태 | 클래스 30개 코드 입력 → 31번째 클래스 추가 → Ctrl+Z | 30개가 1초 안에 그려진다. 31개째에서 `30` 오류가 표시되고 노드는 30개로 유지된다. Ctrl+Z 후 30개 코드로 돌아오고 오류가 사라진다. | [m2-layout.spec.ts](../tests/system/m2-layout.spec.ts) |
+| TC-CMN-9.2-02 | 시스템 | NFR-1, NFR-4 | 9.2, 1.1, 1.2, 5.3 | P1 | 경계값 | 편집기를 연 상태 | 참여자 30명 시퀀스 코드로 TC-CMN-9.2-01과 같은 절차 | TC-CMN-9.2-01과 같다. | [m2-layout.spec.ts](../tests/system/m2-layout.spec.ts) |
 
 ## 2. 요구사항 추적표 (자동 생성)
 

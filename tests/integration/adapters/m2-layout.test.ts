@@ -7,7 +7,7 @@ import { readRoutes, routeKeys } from '../../../src/core/manual-routes';
 
 const parser = new BasicMermaidParser();
 const grid = new GridLayout();
-describe('M2 layout', () => {
+describe('M2 layout [SPEC-3.1]', () => {
   it('places related classes in layers while keeping existing boxes', async () => {
     const model = parser.parse('classDiagram\nA --> B');
     if (model.kind !== 'class') throw new Error();
@@ -26,7 +26,7 @@ describe('M2 layout', () => {
     expect(layout['participant:B'].x).toBeGreaterThan(770);
   });
 
-  it('preserves manual bends across unrelated relation insertion and file round-trip', () => {
+  it('preserves manual bends across unrelated relation insertion and file round-trip [SPEC-2.3][SPEC-5.2]', () => {
     const source = 'classDiagram\nA --> B';
     const model = parser.parse(source);
     if (model.kind !== 'class') throw new Error();
@@ -40,7 +40,7 @@ describe('M2 layout', () => {
   });
 });
 
-it('discards a late layout after a manual move without adding an undo step', async () => {
+it('discards a late layout after a manual move without adding an undo step [SPEC-3.1][SPEC-5.3]', async () => {
   let release!: () => void;
   const waiting = new Promise<void>(resolve => { release = resolve; });
   const store = new DiagramStore(parser, grid, 'classDiagram\nclass A', undefined,
