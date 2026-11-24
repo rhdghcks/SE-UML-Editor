@@ -6,6 +6,8 @@ const source = (page: Page) => page.getByRole('textbox', { name: 'Mermaid 코드
 const invoiceRect = (page: Page) => page.locator('g.canvas-node').filter({ hasText: 'Invoice' }).locator('rect');
 
 async function prepareInvoice(page: Page) {
+  // OS 저장 창은 자동화할 수 없다. 저장 창이 없는 브라우저처럼 만들어 다운로드 경로로 파일을 받는다.
+  await page.addInitScript(() => Object.defineProperty(window, 'showSaveFilePicker', { value: undefined }));
   await page.goto('/');
   await page.getByRole('button', { name: '클래스 예제' }).click();
   await source(page).fill('classDiagram\n  class Invoice');
@@ -34,7 +36,7 @@ async function exportAs(page: Page, label: 'PNG' | 'JPG') {
   return { name: download.suggestedFilename(), bytes: await readFile(path) };
 }
 
-/** 브라우저에서 이미지를 디코딩해 크기와 지정 좌표의 RGB를 읽는다. */
+// 브라우저에서 이미지를 디코딩해 크기와 지정 좌표의 RGB를 읽는다.
 async function decode(page: Page, bytes: Buffer, mime: string, points: Array<[number, number]>) {
   return page.evaluate(async ({ base64, mime, points }) => {
     const image = new Image();

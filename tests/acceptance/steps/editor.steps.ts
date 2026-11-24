@@ -13,6 +13,8 @@ let draggedX: string | null = null;
 
 Given('사용자가 편집기를 열었다', async ({ page }) => {
   draggedX = null;
+  // OS 저장 창은 자동화할 수 없다. 저장 창이 없는 브라우저처럼 만들어 다운로드 경로로 파일을 받는다.
+  await page.addInitScript(() => Object.defineProperty(window, 'showSaveFilePicker', { value: undefined }));
   await page.goto('/');
 });
 
