@@ -100,7 +100,7 @@ button:disabled {
 }
 
 .code-panel,
-.canvas-panel {
+.diagram-panel {
   display: flex;
   flex-direction: column;
 
@@ -113,12 +113,12 @@ button:disabled {
   border-radius: 8px;
 
   /* 경계 확인용 임시 테두리 */
-  /*
-  border: 1px solid #FF0000;*/
+  /*border: 1px solid #FF0000;*/
 }
 
 /* 패널 제목 */
 .panel-heading {
+  flex: 0 0 auto;
   padding-inline: 15px;
   border-bottom: 1px solid #e2e6ee;
   font-weight: 600;
@@ -137,13 +137,6 @@ button:disabled {
 }
 
 /* 다이어그램 영역 */
-
-.swatch {
-  width: 27px;
-  height: 27px;
-  border: 1px solid #9ea8b9;
-  padding: 0;
-}
 
 footer {
   padding-top: 14px;

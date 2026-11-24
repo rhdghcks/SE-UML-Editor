@@ -1,3 +1,11 @@
+//app 최종 출력 화면
+
+//app-header 최상단 텍스트
+//actions 예제 불러오기, Undo/Redo
+//toolbar 파일 불러오기, 파일 저장, 객체 추가, 작업 기록 UI
+
+//workspace 작업화면 2종
+
 import { useRef, useState, useSyncExternalStore } from 'react';
 import { GridLayout } from '../adapters/grid-layout';
 import { BasicMermaidParser } from '../adapters/basic-mermaid-parser';
@@ -62,65 +70,68 @@ export function App() {
     } catch (error) { if (ticket === request.current) setFileError(String(error)); }
   };
 
-  return <main className="app">
-    {/* 맨 위 UI */}
-    <header className="app-header">
-      <div>
-        <h1>SE-UML Editor</h1>
-        <p>공통 모델과 편집 흐름을 확인하는 개발용 화면</p>
+  return (
+    <main className="app">
+      {/* 맨 위 UI */}
+      <header className="app-header">
+        <div>
+          <h1>SE-UML Editor</h1>
+          <p>공통 모델과 편집 흐름을 확인하는 개발용 화면</p>
+        </div>
+
+        {/* 예제 불러오기, Undo/Redo */}
+        <div className="actions">
+          <button onClick={() => { store.openSource(CLASS_EXAMPLE); }}>클래스 예제</button>
+          <button onClick={() => { store.openSource(SEQUENCE_EXAMPLE); }}>시퀀스 예제</button>
+          <button disabled={!store.canUndo()} onClick={store.undo}>Undo</button>
+          <button disabled={!store.canRedo()} onClick={store.redo}>Redo</button>
+        </div>
+      </header>
+
+      {/* 툴바 UI */}
+      <div className="toolbar">
+
+        {/* 파일 불러오기 기능 UI */}
+        <label className="file-input">.mmd 열기<input type="file" accept=".mmd,.txt,text/plain"
+          onChange={(event) => { void openFile(event.target.files?.[0]); event.target.value = ''; }} /></label>
+
+        {/* 불러온 파일 에러 표시 */}
+        {fileError && <span role="alert">{fileError}</span>}
+
+        {/* 파일 저장 버튼, 텍스트 오류시 비활성화 */}
+        <button disabled={Boolean(snapshot.error)} onClick={() => void files.write(store.getPersistedSource()).catch(error => setFileError(String(error)))}>파일 저장</button>
+
+        {/* 객체 추가 UI */}
+        <form onSubmit={event => {
+          event.preventDefault();
+          try {
+            store.addNode(nodeName);
+            setNodeName('');
+            setFileError('');
+          } catch (error) { setFileError(String(error)); }
+        }}>
+          <input aria-label="새 객체 이름" placeholder="새 객체 이름" value={nodeName}
+            onChange={event => setNodeName(event.target.value)} />
+          <button disabled={!nodeName || Boolean(snapshot.error)}>객체 추가</button>
+        </form>
+
+        {/* 작업 기록 UI */}
+        <span>revision {snapshot.revision} · {snapshot.model.kind === 'class' ? 'Class' : 'Sequence'}</span>
       </div>
 
-      {/* 예제 불러오기 */}
-      <div className="actions">
-        <button onClick={() => { store.openSource(CLASS_EXAMPLE); }}>클래스 예제</button>
-        <button onClick={() => { store.openSource(SEQUENCE_EXAMPLE); }}>시퀀스 예제</button>
-        <button disabled={!store.canUndo()} onClick={store.undo}>Undo</button>
-        <button disabled={!store.canRedo()} onClick={store.redo}>Redo</button>
+      {/* 작업 화면 */}
+      <div className="workspace">
+
+        {/* 코드 편집 영역 */}
+        <CodeEditorPanel source={snapshot.source} error={snapshot.error} onChange={store.updateSource}
+        />
+
+        {/* 다이어그램 표시/조작 영역 */}
+        <DiagramPanel snapshot={snapshot} disabled={Boolean(snapshot.error)} onMove={store.moveNode} onChangeColor={store.setNodeColor} />
+
+
       </div>
-    </header>
-
-    {/* 툴바 UI */}
-    <div className="toolbar">
-
-      {/* 파일 불러오기 기능 UI */}
-      <label className="file-input">.mmd 열기<input type="file" accept=".mmd,.txt,text/plain"
-        onChange={(event) => { void openFile(event.target.files?.[0]); event.target.value = ''; }} /></label>
-
-      {/* 불러온 파일 에러 표시 */}
-      {fileError && <span role="alert">{fileError}</span>}
-
-      {/* 파일 저장 버튼, 텍스트 오류시 비활성화 */}
-      <button disabled={Boolean(snapshot.error)} onClick={() => void files.write(store.getPersistedSource()).catch(error => setFileError(String(error)))}>파일 저장</button>
-
-      {/* 객체 추가 UI */}
-      <form onSubmit={event => {
-        event.preventDefault();
-        try {
-          store.addNode(nodeName);
-          setNodeName('');
-          setFileError('');
-        } catch (error) { setFileError(String(error)); }
-      }}>
-        <input aria-label="새 객체 이름" placeholder="새 객체 이름" value={nodeName}
-          onChange={event => setNodeName(event.target.value)} />
-        <button disabled={!nodeName || Boolean(snapshot.error)}>객체 추가</button>
-      </form>
-
-      <span>revision {snapshot.revision} · {snapshot.model.kind === 'class' ? 'Class' : 'Sequence'}</span>
-    </div>
-
-    {/* 작업 화면 */}
-    <div className="workspace">
-
-      {/* 코드 편집 영역 */}
-      <CodeEditorPanel source={snapshot.source} error={snapshot.error} onChange={store.updateSource}
-      />
-
-      {/* 다이어그램 표시/조작 영역 */}
-      <DiagramPanel snapshot={snapshot} disabled={Boolean(snapshot.error)} onMove={store.moveNode} onChangeColor={store.setNodeColor} />
-
-
-    </div>
-    <footer>이 화면은 팀 통합용 샘플입니다. 완전한 Mermaid 렌더러나 최종 UI가 아닙니다.</footer>
-  </main >;
+      <footer>이 화면은 팀 통합용 샘플입니다. 완전한 Mermaid 렌더러나 최종 UI가 아닙니다.</footer>
+    </main >
+  );
 }

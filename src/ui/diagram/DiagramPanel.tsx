@@ -1,7 +1,14 @@
+//diagram-panel 다이어그램 작업 관련 패널
+
+//panel-heading 패널 제목
+//diagram-container 모드에 따라 [프리뷰, 캔버스] 로드
+
+
+
 import { useState, useEffect, useRef } from 'react';
 
 import { MermaidPreview } from './MermaidPreview';
-import { New_DiagramCanvas } from './canvas/new_DiagramCanvas';
+import { Canvas_UI } from './canvas/Canvas_UI';
 import type { EditorSnapshot } from '../../core/types';
 
 import './style-DiagramPanel.css';
@@ -25,7 +32,7 @@ export function DiagramPanel({ snapshot, disabled, onMove, onChangeColor }: Prop
   const [uiMode, setStandard] = useState(false);
 
   return (
-    <section className="canvas-panel">
+    <section className="diagram-panel">
       {/* 제목 텍스트 */}
       <div className="panel-heading">
         <div className="panel-heading-text">
@@ -37,13 +44,12 @@ export function DiagramPanel({ snapshot, disabled, onMove, onChangeColor }: Prop
       </div>
 
       {/* 모드에 따라 다른 UI 로드 */}
-      <div>
+      <div className="diagram-container">
         {uiMode ?
           <MermaidPreview document={snapshot} /> :
-          <New_DiagramCanvas snapshot={snapshot} disabled={disabled} onMove={onMove} onChangeColor={onChangeColor} />
+          <Canvas_UI snapshot={snapshot} disabled={disabled} onMove={onMove} onChangeColor={onChangeColor} />
         }
       </div>
-
     </section>
   );
 

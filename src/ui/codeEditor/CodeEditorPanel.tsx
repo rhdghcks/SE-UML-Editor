@@ -1,3 +1,11 @@
+//code-panel 코드 작업과 관련된 패널
+
+//panel-heading 패널 제목
+//code-editor 코드 입력 영역
+// //line-numbers 코드 입력창의 줄 표시
+// //code-input-area 코드 입력창
+//feedback 에러 정보 표시
+
 import { useRef } from 'react';
 
 import './style-CodeEditorPanel.css';
@@ -53,7 +61,7 @@ export function CodeEditorPanel({ source, error, onChange }: CodeEditorProps) {
         </div>
 
         {/* 코드 입력 및 수정 */}
-        <textarea
+        <textarea className="code-input-area"
           ref={textareaRef}
           spellCheck={false}
           aria-label="Mermaid 코드"

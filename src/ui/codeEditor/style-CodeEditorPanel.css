@@ -16,7 +16,7 @@
 }
 
 .line-numbers,
-.code-editor textarea {
+.code-input-area {
   padding: 5px;
 }
 
@@ -46,7 +46,7 @@
   padding-right: 5px;
 }
 
-.code-editor textarea {
+.code-input-area {
   flex: 1;
 
   /*
@@ -54,15 +54,16 @@
   height: 100%;
   overflow: auto;
   box-sizing: border-box;
-  */
-
   resize: none;
+  */
 
   border: 0;
   /*outline: none;*/
   color: #253148;
 
   font: inherit;
+
+  /* 자동 줄바꿈 끄기 */
   white-space: pre;
 }
 

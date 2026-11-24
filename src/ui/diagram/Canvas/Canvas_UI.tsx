@@ -1,3 +1,9 @@
+//canvas-UI 노드 색상 변경창과 노드 조작창을 로드
+
+//selection-bar 선택 노드 이름과 색상 선택지 버튼
+//canvas 노드 이동이 가능한 창
+
+
 import { useState, useEffect, useRef } from 'react';
 import type { EditorSnapshot } from '../../../core/types';
 import { ClassDiagram } from './ClassDiagram';
@@ -17,7 +23,7 @@ interface Props {
 //다이어그램 색상 선택지
 const COLORS = ['#000000', '#ffffff', '#e8eefb', '#dff2e5', '#fff0ce', '#f9dfdf', '#e9ddf7'];
 
-export function New_DiagramCanvas({ snapshot, disabled, onMove, onChangeColor }: Props) {
+export function Canvas_UI({ snapshot, disabled, onMove, onChangeColor }: Props) {
 
   // 선택 노드 색상 변경을 위한 기능
   const [selected, setSelected] = useState<string | null>(null);
@@ -41,20 +47,31 @@ export function New_DiagramCanvas({ snapshot, disabled, onMove, onChangeColor }:
     previousKind.current = modelKind;
   }, [snapshot]);
 
+
+  const isNodeSelected = Boolean(selected && currentNode);
+
   return (
-    <section className="diagram-canvas">
+    <section className="canvas-UI">
       {/* 색상 선택 버튼 */}
       <div className="selection-bar">
         {/* 선택 노드가 있는 경우 선택지 표시, 없는 경우 문구로 대체 */}
-        {selected && currentNode ? <>
-          <span>선택: {selected} </span>
-          <span>색상</span>
-
-          {COLORS.map((color) => <button key={color} className="swatch"
-            title={color} style={{ backgroundColor: color }} disabled={disabled}
-            onClick={() => onChangeColor(selected, color)} />)}
-        </> : <span>노드를 선택하면 색상을 바꿀 수 있습니다.</span>}
+        <span>선택 노드 : {isNodeSelected ? selected : '없음'} </span>
+        <div>
+          <span>색상 </span>
+          {COLORS.map(
+            (color) =>
+              <button
+                key={color}
+                className="color-switch"
+                title={color}
+                style={{ backgroundColor: color }}
+                disabled={!isNodeSelected || disabled}
+                onClick={() => onChangeColor(selected!, color)}
+              />
+          )}
+        </div>
       </div>
+
 
       <div className="canvas">
         {modelKind === 'class' ? (
@@ -65,6 +82,8 @@ export function New_DiagramCanvas({ snapshot, disabled, onMove, onChangeColor }:
           <div>(IMSI)UNKNOWN</div>
         )}
       </div>
+
+
     </section>
   );
 }
