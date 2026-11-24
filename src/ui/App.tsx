@@ -1,4 +1,5 @@
-import { useState, useSyncExternalStore } from 'react';
+import { arrangeClasses } from '../adapters/elk-layout';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { GridLayout } from '../adapters/grid-layout';
 import { MermaidParser } from '../adapters/mermaid-parser';
 import { BasicMermaidParser } from '../adapters/basic-mermaid-parser';
@@ -31,7 +32,7 @@ const SEQUENCE_EXAMPLE = `sequenceDiagram
     Server-->>User: unauthorized
   end`;
 
-const store = new DiagramStore(new MermaidParser(new BasicMermaidParser(), await loadMermaidRuntime()), new GridLayout(), SEQUENCE_EXAMPLE);
+const store = new DiagramStore(new MermaidParser(new BasicMermaidParser(), await loadMermaidRuntime()), new GridLayout(), SEQUENCE_EXAMPLE, undefined, arrangeClasses);
 const COLORS = ['#000000', '#ffffff', '#e8eefb', '#dff2e5', '#fff0ce', '#f9dfdf', '#e9ddf7'];
 
 const files = new LocalFileManager();
@@ -52,6 +53,17 @@ export function App() {
     typing.current.lastInput = now;
     store.updateSource(source, typing.current.group);
   }
+  useEffect(() => {
+    function onHistoryKey(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.isComposing ||
+          event.key.toLowerCase() !== 'z' || event.target instanceof HTMLInputElement) return;
+      event.preventDefault();
+      if (event.shiftKey) store.redo();
+      else store.undo();
+    }
+    window.addEventListener('keydown', onHistoryKey);
+    return () => window.removeEventListener('keydown', onHistoryKey);
+  }, []);
   const request = useRef(0);
   const openFile = async (file: File | undefined) => {
     if (!file) return;

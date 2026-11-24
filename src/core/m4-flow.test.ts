@@ -28,3 +28,18 @@ it.each([
   store.redo();
   expect(store.getSnapshot().source).toBe(edited.source);
 });
+
+it('keeps manual size and color when stale metadata returns and drops removed nodes', () => {
+  const store = new DiagramStore(new BasicMermaidParser(), new GridLayout(), 'classDiagram\nclass A\nclass B');
+  store.moveNode('class:A', 301, 95);
+  const stale = store.getPersistedSource();
+  store.resizeNode('class:A', 310, 140);
+  store.setNodeColor('class:A', '#ffeeaa');
+  const box = store.getSnapshot().layout['class:A'];
+  store.updateSource(stale.replace('class B', 'class C'));
+  const edited = store.getSnapshot();
+  expect(edited.error).toBeNull();
+  expect(edited.layout['class:A']).toEqual(box);
+  expect(readLayoutMetadata(edited.source).layout).toEqual(edited.layout);
+  expect(edited.layout).not.toHaveProperty('class:B');
+});
