@@ -1,5 +1,9 @@
 name: Verify shared editor
-on: [push, pull_request]
+# PR 브랜치는 pull_request로 한 번만 검증하고, push는 병합 후 main만 검증한다.
+on:
+  push:
+    branches: [main]
+  pull_request:
 permissions:
   contents: read
 concurrency:
