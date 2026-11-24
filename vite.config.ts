@@ -34,7 +34,7 @@ export default defineConfig({
       // 현재 수치보다 약간 낮게 잡은 하한선. 커버리지가 오르면 함께 올린다.
       // 브라우저 전용 코드(MermaidPreview, 파일 다운로드, 포인터 드래그)는 Playwright가 검증한다.
       thresholds: {
-        statements: 85, branches: 85, functions: 75, lines: 85,
+        statements: 88, branches: 85, functions: 85, lines: 88,
         'src/core/**': { statements: 95, branches: 90, functions: 95, lines: 95 },
       },
     },
