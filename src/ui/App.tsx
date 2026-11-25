@@ -10,6 +10,10 @@ import { MermaidPreview } from './MermaidPreview';
 import { MermaidRenderer } from '../adapters/mermaid-renderer';
 import { LocalFileManager } from '../adapters/local-file-manager';
 import { DiagramCanvas } from './DiagramCanvas';
+import { AlignmentSnap } from '../adapters/alignment-snap';
+import { writeRoute } from '../core/route-editing';
+import { canvasEdges } from '../core/diagram-geometry';
+import { LayoutInteraction } from '../core/layout-interaction';
 
 const CLASS_EXAMPLE = `classDiagram
   class User {
@@ -32,7 +36,10 @@ const SEQUENCE_EXAMPLE = `sequenceDiagram
     Server-->>User: unauthorized
   end`;
 
-const store = new DiagramStore(new MermaidParser(new BasicMermaidParser(), await loadMermaidRuntime()), new GridLayout(), SEQUENCE_EXAMPLE, undefined, arrangeClasses);
+const snap: AlignmentSnap = new AlignmentSnap(() => store.getSnapshot());
+const interaction = new LayoutInteraction();
+const store: DiagramStore = new DiagramStore(new MermaidParser(new BasicMermaidParser(), await loadMermaidRuntime()), new GridLayout(), SEQUENCE_EXAMPLE, snap,
+  (model, boxes, added) => interaction.complete(arrangeClasses(model, boxes, added)));
 const COLORS = ['#000000', '#ffffff', '#e8eefb', '#dff2e5', '#fff0ce', '#f9dfdf', '#e9ddf7'];
 
 const files = new LocalFileManager();
@@ -46,6 +53,15 @@ export function App() {
   const [nodeName, setNodeName] = useState('');
   const [standard, setStandard] = useState(false);
   const [fileError, setFileError] = useState('');
+  const [snapEnabled, setSnapEnabled] = useState(true);
+  function updateRoute(key: string, points: Array<{ x: number; y: number }>) {
+    const current = store.getSnapshot();
+    if (current.error) throw new Error('코드 오류를 수정한 뒤 편집하세요.');
+    if (!canvasEdges(current).some(edge => edge.key === key)) throw new Error('없는 간선입니다.');
+    store.updateSource(writeRoute(current.source, key, points));
+    const error = store.getSnapshot().error;
+    if (error) throw new Error(error);
+  }
   const typing = useRef({ group: Symbol(), lastInput: -Infinity });
   function editCode(source: string) {
     const now = performance.now();
@@ -110,6 +126,9 @@ export function App() {
         <button disabled={!nodeName || Boolean(snapshot.error)}>객체 추가</button>
       </form>
       <span>revision {snapshot.revision} · {snapshot.model.kind === 'class' ? 'Class' : 'Sequence'}</span>
+      <label><input type="checkbox" checked={snapEnabled} onChange={event => {
+        snap.enabled = event.target.checked; setSnapEnabled(event.target.checked);
+      }} /> 노드·간선 스냅</label>
     </div>
     <div className="workspace">
       <section className="code-panel">
@@ -124,7 +143,10 @@ export function App() {
       <section className="canvas-panel">
         <div className="panel-heading">캔버스 (개발용 미리보기)</div>
         {standard ? <MermaidPreview document={snapshot} renderer={renderer} /> : <DiagramCanvas document={snapshot} disabled={Boolean(snapshot.error)}
-          selected={selected} onSelect={setSelected} onMove={store.moveNode} />}
+          selected={selected} onSelect={setSelected} onMove={store.moveNode} onResize={store.resizeNode}
+          onRouteChange={updateRoute} onError={setFileError}
+          onInteractionStart={() => interaction.begin()}
+          snapNode={(point, id) => snap.snap(point, id, store.getSnapshot().layout)} />}
         <div className="selection-bar">
           {selected && currentNode ? <>
             <span>선택: {selected}</span>

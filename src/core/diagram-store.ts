@@ -1,4 +1,7 @@
 import { mergeRoutes } from './manual-routes';
+import { sequenceRouteKeys } from './diagram-geometry';
+import { readRoutes } from './manual-routes';
+import { writeRoute } from './route-editing';
 import type { IDiagramEditor, ILayoutEngine, IParser, ISnapStrategy } from './contracts';
 import { readLayoutMetadata, writeLayoutMetadata } from './layout-metadata';
 import type { ClassDiagram, EditorSnapshot, LayoutMap, NodeLayout } from './types';
@@ -26,6 +29,14 @@ export class DiagramStore implements IDiagramEditor {
     if (model.kind === 'class') {
       const carry = (origin === 'code' || origin === 'gui') && this.valid.model.kind === 'class';
       source = mergeRoutes(source, carry ? this.valid.source : '', model.relations);
+    } else {
+      const incoming = readRoutes(source);
+      if ((origin === 'code' || origin === 'gui') && this.valid.model.kind === 'sequence') {
+        const prior = readRoutes(this.valid.source);
+        for (const key of sequenceRouteKeys(model.steps)) {
+          if (!incoming.has(key) && prior.has(key)) source = writeRoute(source, key, prior.get(key)!);
+        }
+      }
     }
     const previous: LayoutMap = (origin === 'code' || origin === 'gui') && model.kind === this.valid.model.kind
       ? this.valid.layout : {};
@@ -122,6 +133,8 @@ export class DiagramStore implements IDiagramEditor {
     const layout = { ...this.valid.layout, [id]: node };
     validateLayout(this.valid.model, layout);
     if (JSON.stringify(current) === JSON.stringify(node)) return;
+    // A resize or style edit is also a user adjustment; stale imported metadata must not overwrite it.
+    node.placement = 'manual';
     const source = writeLayoutMetadata(this.valid.source, layout);
     this.commit({ ...this.valid, layout, source, origin: 'gui', revision: this.snapshot.revision + 1 });
   }
