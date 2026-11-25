@@ -217,6 +217,31 @@ describe('DiagramCanvas 상태 전이 [SPEC-1.2]', () => {
     expect(screen.getByText('loop: retry')).toBeInTheDocument();
     expect(screen.getByText('ping')).toBeInTheDocument();
   });
+
+  it('참여자 드래그 미리보기·취소와 크기 변경이 활성화·분기 설명 위치에 반영된다 [SPEC-2.1][SPEC-2.4][SPEC-1.3]', () => {
+    const code = 'sequenceDiagram\nUser->>Server: call\nactivate Server\nServer-->>User: reply\ndeactivate Server\nalt valid\nUser->>Server: next\nelse expired\nServer-->>User: no\nend';
+    const source = code + '\n%% @se-uml-layout ' + JSON.stringify({ version: 1, nodes: {
+      'participant:User': { ...BOXES['class:A'], height: 70 },
+      'participant:Server': { ...BOXES['class:B'], height: 70 },
+    } });
+    const { store, svg, box, at, drag } = setup(source);
+    const label = screen.getByText('activate: Server');
+    expect(label).toHaveAttribute('x', '433');
+    expect(label).toHaveAttribute('text-anchor', 'end');
+    fireEvent.pointerDown(box('participant:User'), at(100, 100));
+    fireEvent.pointerMove(svg, at(650, 100));
+    expect(label).toHaveAttribute('x', '457');
+    expect(screen.getByText('else: expired')).toHaveAttribute('x', '362');
+    fireEvent.pointerCancel(svg, at(650, 100));
+    expect(label).toHaveAttribute('x', '433');
+    expect(store.getSnapshot().source).toBe(source);
+    drag(box('participant:User'), [100, 100], [650, 100]);
+    act(() => store.resizeNode('participant:Server', 230, 100));
+    expect(label).toHaveAttribute('x', '477');
+    expect(screen.getByText('deactivate: Server')).toHaveAttribute('x', '477');
+    expect(screen.getByText('alt: valid')).toHaveAttribute('x', '362');
+    expect(store.getSnapshot().source.split('\n%%')[0]).toBe(code);
+  });
 });
 
 describe('DiagramCanvas 보기 조작과 문서 상태 연결 [SPEC-2.5]', () => {

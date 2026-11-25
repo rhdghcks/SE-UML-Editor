@@ -7,6 +7,8 @@ export interface SequenceRow {
   from?: string;
   to?: string;
   arrow?: string;
+  target?: string;
+  participants?: string[];
   text: string;
   depth: number;
 }
@@ -14,13 +16,37 @@ export interface SequenceRow {
 export function sequenceRows(steps: SequenceStep[], depth = 0): SequenceRow[] {
   return steps.flatMap((step): SequenceRow[] => {
     if (step.kind === 'message') return [{ ...step, depth }];
-    if (step.kind === 'activation') return [{ id: step.id, depth,
+    if (step.kind === 'activation') return [{ id: step.id, depth, target: step.target,
       text: `${step.action}: ${step.target.replace(/^participant:/, '')}` }];
-    return step.branches.flatMap((branch, index) => [{
-      id: `${step.id}:${index}`, depth,
+    const branches = step.branches.map(branch => ({ ...branch, rows: sequenceRows(branch.steps, depth + 1) }));
+    const participants = [...new Set(branches.flatMap(branch => branch.rows.flatMap(row =>
+      row.from && row.to ? [row.from, row.to] : row.target ? [row.target] : [])))];
+    return branches.flatMap((branch, index) => [{
+      id: `${step.id}:${index}`, depth, participants,
       text: `${index ? (step.operator === 'critical' ? 'option' : 'else') : step.operator}: ${branch.label}`,
-    }, ...sequenceRows(branch.steps, depth + 1)]);
+    }, ...branch.rows]);
   });
+}
+
+export interface SequenceLabelPosition extends BendPoint { textAnchor: 'start' | 'end' }
+
+/** Labels follow their participant or the participants referenced by the whole block. */
+export function sequenceLabelPosition(row: SequenceRow, index: number, layout: LayoutMap): SequenceLabelPosition | undefined {
+  if (row.from) return undefined;
+  const y = firstSequenceRow(layout) + index * 65;
+  if (row.target) {
+    const target = layout[row.target];
+    if (!target) return undefined;
+    const x = target.x + target.width / 2;
+    const centers = Object.values(layout).map(box => box.x + box.width / 2);
+    // Face the inside of the diagram, including when participants cross one another.
+    const textAnchor = x <= (Math.min(...centers) + Math.max(...centers)) / 2 ? 'start' : 'end';
+    return { x: x + (textAnchor === 'start' ? 12 : -12), y, textAnchor };
+  }
+  const ids = row.participants?.length ? row.participants : Object.keys(layout);
+  const boxes = ids.flatMap(id => layout[id] ? [layout[id]] : []);
+  if (!boxes.length) return undefined;
+  return { x: Math.min(...boxes.map(box => box.x)) + 12 + row.depth * 12, y, textAnchor: 'start' };
 }
 
 export function sequenceRouteKeys(steps: SequenceStep[]): string[] {

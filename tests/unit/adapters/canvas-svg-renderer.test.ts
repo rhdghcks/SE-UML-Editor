@@ -45,5 +45,16 @@ describe('CanvasSvgRenderer: 편집 캔버스를 단독 SVG로 만든다 [SPEC-6
       const svg = await renderer.render(open('classDiagram\n  class Invoice').getSnapshot());
       expect(svg).not.toContain('stroke="#3367d6"');
     });
+
+    it('시퀀스 참여자의 이동을 내보낸 활성화·분기 설명에도 반영한다 [SPEC-1.3][SPEC-2.1]', async () => {
+      const store = open('sequenceDiagram\nUser->>Server: login\nactivate Server\nServer-->>User: token\ndeactivate Server\nalt valid\nUser->>Server: next\nelse expired\nServer-->>User: no\nend');
+      store.moveNode('participant:User', 610, 70);
+      store.moveNode('participant:Server', 450, 90);
+      store.resizeNode('participant:Server', 190, 70);
+      const svg = await renderer.render(store.getSnapshot());
+      expect(svg).toMatch(/<text[^>]*x="557"[^>]*text-anchor="start"[^>]*>activate: Server<\/text>/);
+      expect(svg).toMatch(/<text[^>]*x="557"[^>]*text-anchor="start"[^>]*>deactivate: Server<\/text>/);
+      expect(svg).toMatch(/<text[^>]*x="462"[^>]*>alt: valid<\/text>/);
+    });
   });
 });

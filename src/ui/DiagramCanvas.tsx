@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, PointerEvent } from 'react';
 import type { DiagramDocument, NodeLayout } from '../core/types';
 import type { BendPoint } from '../core/manual-routes';
-import { canvasEdges, firstSequenceRow, nearestPoint, sequenceRows } from '../core/diagram-geometry';
+import { canvasEdges, firstSequenceRow, nearestPoint, sequenceLabelPosition, sequenceRows } from '../core/diagram-geometry';
 import type { CanvasEdge } from '../core/diagram-geometry';
 import { MAX_ZOOM, MIN_ZOOM, fitViewport, panViewport, zoomViewport } from './canvas-viewport';
 import type { CanvasViewport } from './canvas-viewport';
@@ -309,8 +309,12 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
         return box && <line key={participant.id} x1={box.x + box.width / 2} y1={box.y + box.height}
           x2={box.x + box.width / 2} y2={height - 35} stroke="#9da7b6" strokeDasharray="6 5" pointerEvents="none" />;
       })}
-      {model.kind === 'sequence' && rows.map((row, index) => !row.from &&
-        <text key={row.id} x={30 + row.depth * 12} y={firstSequenceRow(displayLayout) + index * 65} fontSize="16" pointerEvents="none">{row.text}</text>)}
+      {model.kind === 'sequence' && rows.map((row, index) => {
+        const label = sequenceLabelPosition(row, index, displayLayout);
+        return label && <text key={row.id} className="sequence-annotation" data-sequence-row-id={row.id}
+          data-target-id={row.target} x={label.x} y={label.y} textAnchor={label.textAnchor}
+          fontSize="16" pointerEvents="none">{row.text}</text>;
+      })}
       {nodes.map((node, index) => {
         const box = displayLayout[node.id];
         if (!box) return null;

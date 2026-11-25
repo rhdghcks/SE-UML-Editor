@@ -37,6 +37,8 @@
 | TC-CANVAS-2.5-04 | 시스템 | 추가 요청 | 2.5 | P2 | 오류 추측 | 긴 관계 라벨을 가진 클래스 A → B | 확대·화면 이동 → 보기 초기화 → 초기화 반복 | 노드와 긴 라벨이 모두 캔버스 안에 여백을 두고 보이며 가운데 정렬된다. 원문은 그대로이고 반복 초기화 결과가 같다. | [m3-viewport.spec.ts](../tests/system/m3-viewport.spec.ts) |
 | TC-CANVAS-2.5-05 | 시스템 | 추가 요청 | 2.5 | P2 | 오류 추측 | 긴 critical 제목과 option을 가진 시퀀스 | 확대·화면 이동 → 보기 초기화 → 초기화 반복 | 참여자·메시지·생명선·긴 블록 제목이 모두 캔버스 안에 보인다. 원문은 그대로이고 반복 초기화 결과가 같다. | [m3-viewport.spec.ts](../tests/system/m3-viewport.spec.ts) |
 
+| TC-CANVAS-2.1-04 | 시스템 | FR-2, FR-3, FR-13 | 2.1, 1.3, 5.3, 5.2 | P1 | 상태 전이, 왕복 | User(60,70)·Server(350,70)와 activate/deactivate·alt/else가 있는 시퀀스 | User를 Server 오른쪽으로 이동 → 확대 상태에서 Server 이동 → Undo/Redo → 저장 후 다른 예제로 전환 → 재열기 | 활성화 설명은 Server 생명선 옆(433→457→557)에 붙고 좌우 순서에 따라 정렬 방향이 바뀐다. 분기 설명은 참조 참여자의 왼쪽 위치를 따르며, Undo/Redo·재열기로 같은 위치가 복원된다. | [m3-sequence-annotations.spec.ts](../tests/system/m3-sequence-annotations.spec.ts) |
+
 ## 2. 요구사항 추적표 (자동 생성)
 
 전체 테스트(단위·통합·시스템·인수)와 요구사항의 연결은 테스트 이름의 `SPEC-x.y` 태그로 자동 생성한다. 손으로 관리하지 않는다.
