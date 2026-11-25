@@ -16,27 +16,43 @@ export function routeKeys(relations: ClassRelation[]) {
   });
 }
 
-export function readRoutes(source: string): ManualRoutes {
-  const routes: ManualRoutes = new Map();
+interface RouteEntry { points: BendPoint[]; offsetY?: number }
+
+function readRouteEntries(source: string): Map<string, RouteEntry> {
+  const routes = new Map<string, RouteEntry>();
   for (const line of source.split(/\r?\n/)) {
     if (!line.trimStart().startsWith(marker)) continue;
     const data = JSON.parse(line.trimStart().slice(marker.length));
     if (!data || typeof data.key !== 'string' || routes.has(data.key) ||
         !Array.isArray(data.points) || !data.points.every((p: BendPoint) =>
-          p && Number.isFinite(p.x) && Number.isFinite(p.y))) {
+          p && Number.isFinite(p.x) && Number.isFinite(p.y)) ||
+        (data.offsetY !== undefined && !Number.isFinite(data.offsetY))) {
       throw new Error('간선 경로 주석의 키 또는 좌표가 올바르지 않습니다.');
     }
-    routes.set(data.key, data.points);
+    routes.set(data.key, { points: data.points, offsetY: data.offsetY });
   }
   return routes;
 }
 
+export function readRoutes(source: string): ManualRoutes {
+  return new Map([...readRouteEntries(source)].map(([key, entry]) => [key, entry.points]));
+}
+
+/** Optional sequence-message height; old route comments have an implicit zero offset. */
+export function readSequenceOffsets(source: string): Map<string, number> {
+  const offsets = new Map<string, number>();
+  for (const [key, entry] of readRouteEntries(source)) {
+    if (entry.offsetY !== undefined) offsets.set(key, entry.offsetY);
+  }
+  return offsets;
+}
+
 export function mergeRoutes(source: string, previous: string, relations: ClassRelation[]) {
-  const incoming = readRoutes(source);
-  const prior = readRoutes(previous);
+  const incoming = readRouteEntries(source);
+  const prior = readRouteEntries(previous);
   for (const key of routeKeys(relations)) {
     if (!incoming.has(key) && prior.has(key)) {
-      source += '\n' + marker + JSON.stringify({ key, points: prior.get(key) });
+      source += '\n' + marker + JSON.stringify({ key, ...prior.get(key) });
     }
   }
   return source;
