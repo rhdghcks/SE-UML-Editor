@@ -48,5 +48,6 @@ npm run build
 - [아키텍처·데이터 계약](docs/ARCHITECTURE.md)
 - [팀원 개발 가이드 및 코딩 도구 프롬프트](docs/TEAM_DEVELOPMENT.md)
 - [프로젝트 요구사항 명세서](https://app.notion.com/p/2e269c9c218383dfb5380180743be5ea)
+- [소프트웨어 테스트 계획 및 테스트 케이스 명세서](https://app.notion.com/p/42369c9c21838147a203fe2c5e588a5a)
 
 각 팀원은 본인 모듈의 구현을 `src/adapters` 또는 새 기능 디렉터리에서 작성하고, `src/core`의 계약 변경이 필요한 경우 먼저 팀 전체에 공유해 주세요.
