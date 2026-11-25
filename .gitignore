@@ -3,6 +3,10 @@ dist/
 coverage/
 *.local
 .DS_Store
+.omc/
 
 test-results/
 playwright-report/
+
+tests/acceptance/.features-gen/
+reports/

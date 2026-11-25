@@ -1,13 +1,13 @@
 import { expect, it } from 'vitest';
-import { BasicMermaidParser } from '../adapters/basic-mermaid-parser';
-import { GridLayout } from '../adapters/grid-layout';
-import { DiagramStore } from './diagram-store';
-import { readLayoutMetadata } from './layout-metadata';
+import { BasicMermaidParser } from '../../../src/adapters/basic-mermaid-parser';
+import { GridLayout } from '../../../src/adapters/grid-layout';
+import { DiagramStore } from '../../../src/core/diagram-store';
+import { readLayoutMetadata } from '../../../src/core/layout-metadata';
 
 it.each([
   ['classDiagram', 'class', 'class:A'],
   ['sequenceDiagram', 'participant', 'participant:A'],
-])('merges positions and restores edit boundaries for %s', (header, keyword, id) => {
+])('merges positions and restores edit boundaries for %s [SPEC-3.1][SPEC-3.2][SPEC-5.3]', (header, keyword, id) => {
   const source = header + '\n' + keyword + ' A';
   const store = new DiagramStore(new BasicMermaidParser(), new GridLayout(), source);
   const stale = store.getPersistedSource();
@@ -29,7 +29,7 @@ it.each([
   expect(store.getSnapshot().source).toBe(edited.source);
 });
 
-it('keeps manual size and color when stale metadata returns and drops removed nodes', () => {
+it('keeps manual size and color when stale metadata returns and drops removed nodes [SPEC-3.1][SPEC-3.2]', () => {
   const store = new DiagramStore(new BasicMermaidParser(), new GridLayout(), 'classDiagram\nclass A\nclass B');
   store.moveNode('class:A', 301, 95);
   const stale = store.getPersistedSource();

@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 
-test('편집, GUI 색상, Undo, 공식 SVG 미리보기', async ({ page }) => {
+test('[TC-CODE-1.1-01] 편집, GUI 색상, Undo, 공식 SVG 미리보기', {
+  tag: ['@SPEC-1.1', '@SPEC-1.3', '@SPEC-4.1', '@SPEC-5.3'],
+}, async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '클래스 예제' }).click();
   const source = page.getByRole('textbox', { name: 'Mermaid 코드' });
@@ -14,37 +16,14 @@ test('편집, GUI 색상, Undo, 공식 SVG 미리보기', async ({ page }) => {
   await expect(source).toHaveValue('classDiagram\n  class Invoice');
   await page.getByRole('button', { name: 'Mermaid 미리보기' }).click();
   await expect(page.getByRole('img', { name: 'Mermaid 자동 배치 결과' })).toBeVisible();
+  page.once('dialog', dialog => void dialog.accept());
   await page.getByRole('button', { name: '시퀀스 예제' }).click();
   await expect(page.getByRole('img', { name: 'Mermaid 자동 배치 결과' })).toBeVisible();
 });
 
-test('드래그 → 코드 편집 → 저장 파일 재열기에서 수동 배치 보존', async ({ page }) => {
-  await page.goto('/');
-  const source = page.getByRole('textbox', { name: 'Mermaid 코드' });
-  await source.fill('classDiagram\nclass Invoice');
-  const box = await page.locator('g.canvas-node rect').boundingBox();
-  if (!box) throw new Error('Invoice가 화면에 없습니다.');
-  const x = box.x + box.width / 2, y = box.y + box.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x + 42, y + 24, { steps: 5 });
-  await page.mouse.up();
-  await expect(source).toHaveValue(/"placement":"manual"/);
-  const rect = page.locator('g.canvas-node').filter({ hasText: 'Invoice' }).locator('rect');
-  const movedX = await rect.getAttribute('x');
-  await source.fill('classDiagram\nclass Invoice\nclass Order');
-  await expect(rect).toHaveAttribute('x', movedX!);
-  const downloading = page.waitForEvent('download');
-  await page.getByRole('button', { name: '파일 저장' }).click();
-  const path = await (await downloading).path();
-  if (!path) throw new Error('다운로드가 완료되지 않았습니다.');
-  await page.getByRole('button', { name: '시퀀스 예제' }).click();
-  await page.locator('input[type=file]').setInputFiles(path);
-  await expect(rect).toHaveAttribute('x', movedX!);
-  await expect(source).toHaveValue(/"placement":"manual"/);
-});
-
-test('Mermaid adapter updates the team canvas and reports unsupported syntax with its source line', async ({ page }) => {
+test('[TC-CODE-1.3-01] Mermaid adapter updates the team canvas and reports unsupported syntax with its source line', {
+  tag: ['@SPEC-1.3', '@SPEC-1.2'],
+}, async ({ page }) => {
   await page.goto('/');
   const editor = page.getByRole('textbox', { name: 'Mermaid 코드' });
   await editor.fill('classDiagram\nclass Order\nOrder : +total()\nOrder --> Customer : places');
@@ -61,7 +40,9 @@ test('Mermaid adapter updates the team canvas and reports unsupported syntax wit
   await expect(page.getByText('응답', { exact: true })).toBeVisible();
 });
 
-test('shows critical options in the team canvas and retains their syntax in the official preview', async ({ page }) => {
+test('[TC-CODE-1.3-02] shows critical options in the team canvas and retains their syntax in the official preview', {
+  tag: ['@SPEC-1.3'],
+}, async ({ page }) => {
   await page.goto('/');
   const code = 'sequenceDiagram\ncritical 결제 승인\ncritical 재고 확인\nA->>B: 요청\nend\noption 시간 초과\nB-->>A: 대기\noption 권한 거부\nB-->>A: 실패\nend';
   const editor = page.getByRole('textbox', { name: 'Mermaid 코드' });
@@ -80,7 +61,9 @@ test('shows critical options in the team canvas and retains their syntax in the 
   await expect.poll(svgSource).toContain('취소');
 });
 
-test('reports an inactive participant at its original line and keeps the previous canvas', async ({ page }) => {
+test('[TC-CODE-1.2-01] reports an inactive participant at its original line and keeps the previous canvas', {
+  tag: ['@SPEC-1.2'],
+}, async ({ page }) => {
   await page.goto('/');
   const editor = page.getByRole('textbox', { name: 'Mermaid 코드' });
   const normal = 'sequenceDiagram\nparticipant A\nparticipant B\nA->>B: keep';

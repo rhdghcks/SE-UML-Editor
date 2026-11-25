@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest';
-import { LayoutInteraction } from './layout-interaction';
-import { DiagramStore } from './diagram-store';
-import { BasicMermaidParser } from '../adapters/basic-mermaid-parser';
-import { GridLayout } from '../adapters/grid-layout';
+import { LayoutInteraction } from '../../../src/core/layout-interaction';
+import { DiagramStore } from '../../../src/core/diagram-store';
+import { BasicMermaidParser } from '../../../src/adapters/basic-mermaid-parser';
+import { GridLayout } from '../../../src/adapters/grid-layout';
 
 function setup() {
   const interaction = new LayoutInteraction();
@@ -15,7 +15,7 @@ function setup() {
   return { interaction, store, finishLayout };
 }
 
-it('preserves the active drag document when layout completes, then commits one undo step', async () => {
+it('preserves the active drag document when layout completes, then commits one undo step [SPEC-2.1][SPEC-3.1][SPEC-5.3]', async () => {
   const { interaction, store, finishLayout } = setup();
   const before = store.getSnapshot();
   const end = interaction.begin();
@@ -32,7 +32,7 @@ it('preserves the active drag document when layout completes, then commits one u
   expect(store.canUndo()).toBe(false);
 });
 
-it('allows completed layout after a cancelled gesture without creating undo history', async () => {
+it('allows completed layout after a cancelled gesture without creating undo history [SPEC-3.1][SPEC-5.3]', async () => {
   const { interaction, store, finishLayout } = setup();
   const end = interaction.begin();
   await Promise.resolve();
@@ -45,7 +45,7 @@ it('allows completed layout after a cancelled gesture without creating undo hist
   expect(store.canUndo()).toBe(false);
 });
 
-it('does not publish into a new document after the gesture is released', async () => {
+it('does not publish into a new document after the gesture is released [SPEC-3.1][SPEC-5.2]', async () => {
   const { interaction, store, finishLayout } = setup();
   const end = interaction.begin();
   await Promise.resolve();

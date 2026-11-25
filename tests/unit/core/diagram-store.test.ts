@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { GridLayout } from '../adapters/grid-layout';
-import { BasicMermaidParser } from '../adapters/basic-mermaid-parser';
-import { DiagramStore } from './diagram-store';
-import { readLayoutMetadata } from './layout-metadata';
+import { GridLayout } from '../../../src/adapters/grid-layout';
+import { BasicMermaidParser } from '../../../src/adapters/basic-mermaid-parser';
+import { DiagramStore } from '../../../src/core/diagram-store';
+import { readLayoutMetadata } from '../../../src/core/layout-metadata';
 
 const SAMPLE = `classDiagram
   class User
@@ -12,7 +12,7 @@ const createStore = (source = SAMPLE) =>
   new DiagramStore(new BasicMermaidParser(), new GridLayout(), source);
 
 describe('DiagramStore', () => {
-  it('preserves moved coordinates in Mermaid comments and after reload', () => {
+  it('preserves moved coordinates in Mermaid comments and after reload [SPEC-3.2][SPEC-5.2]', () => {
     const store = createStore();
     store.moveNode('class:User', 321, 158);
     const saved = store.getSnapshot().source;
@@ -21,7 +21,7 @@ describe('DiagramStore', () => {
     expect(createStore(saved).getSnapshot().layout['class:User'].y).toBe(158);
   });
 
-  it('keeps adjusted positions when new code introduces a node', () => {
+  it('keeps adjusted positions when new code introduces a node [SPEC-3.1]', () => {
     const store = createStore();
     store.moveNode('class:User', 407, 245);
     store.updateSource(`classDiagram\n  class User\n  class Account\n  class Invoice`);
@@ -31,7 +31,7 @@ describe('DiagramStore', () => {
     expect(createStore(store.getPersistedSource()).getSnapshot().layout['class:User'].x).toBe(407);
   });
 
-  it('keeps the last valid model when editing invalid code', () => {
+  it('keeps the last valid model when editing invalid code [SPEC-1.2]', () => {
     const store = createStore();
     store.updateSource('classDiagram\n  invalid syntax');
     expect(store.getSnapshot().error).toContain('2행');
@@ -43,7 +43,7 @@ describe('DiagramStore', () => {
     expect(store.getSnapshot().source).toBe(SAMPLE);
   });
 
-  it('supports five undo levels and redo', () => {
+  it('supports five undo levels and redo [SPEC-5.3]', () => {
     const store = createStore();
     for (let index = 1; index <= 7; index++) store.moveNode('class:User', index * 10, 70);
     for (let index = 0; index < 5; index++) store.undo();
@@ -53,7 +53,7 @@ describe('DiagramStore', () => {
     expect(store.getSnapshot().layout['class:User'].x).toBe(30);
   });
 
-  it('notifies listeners and resets redo after a new change', () => {
+  it('notifies listeners and resets redo after a new change [SPEC-5.3]', () => {
     const store = createStore();
     const listener = vi.fn();
     const unsubscribe = store.subscribe(listener);
@@ -68,7 +68,7 @@ describe('DiagramStore', () => {
     expect(listener).toHaveBeenCalledTimes(3);
   });
 
-  it('rejects more than 30 canvas nodes', () => {
+  it('rejects more than 30 canvas nodes [SPEC-9.2]', () => {
     const store = createStore();
     const source = 'classDiagram\n' + Array.from({ length: 31 }, (_, index) =>
       `class Node${index}`).join('\n');

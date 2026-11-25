@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-test('layout finishing during a drag does not cancel the move or add an undo step', async ({ page }) => {
+test('[TC-CANVAS-2.1-03] layout finishing during a drag does not cancel the move or add an undo step', {
+  tag: ['@SPEC-2.1', '@SPEC-3.1', '@SPEC-5.3'],
+}, async ({ page }) => {
   let releaseModule!: () => void;
   let requested!: () => void;
   const held = new Promise<void>(resolve => { releaseModule = resolve; });

@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { BasicMermaidParser } from './basic-mermaid-parser';
-import { BasicMermaidSerializer } from './basic-mermaid-serializer';
-import { MermaidParser } from './mermaid-parser';
-import { validateModel } from '../core/validation';
+import { BasicMermaidParser } from '../../../src/adapters/basic-mermaid-parser';
+import { BasicMermaidSerializer } from '../../../src/adapters/basic-mermaid-serializer';
+import { MermaidParser } from '../../../src/adapters/mermaid-parser';
+import { validateModel } from '../../../src/core/validation';
 
 const basic = new BasicMermaidParser();
 
-describe('M1 parser contract', () => {
-  it('checks support with original line numbers before calling the Mermaid runtime', () => {
+describe('M1 parser contract [SPEC-1.3]', () => {
+  it('checks support with original line numbers before calling the Mermaid runtime [SPEC-1.2]', () => {
     let called = false;
     const parser = new MermaidParser(basic, { parse() {
       called = true;
@@ -32,7 +32,7 @@ describe('M1 parser contract', () => {
   });
 });
 
-it('locates inactive-participant errors and round-trips balanced nested activations', () => {
+it('locates inactive-participant errors and round-trips balanced nested activations [SPEC-1.3][SPEC-1.2]', () => {
   const parser = new MermaidParser(basic, { parse() {
     throw new Error('should reject before the runtime');
   } });

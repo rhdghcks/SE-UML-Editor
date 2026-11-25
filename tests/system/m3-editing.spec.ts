@@ -26,7 +26,9 @@ async function drag(page: Page, from: { x: number; y: number }, to: { x: number;
 }
 const node = (page: Page, id: string) => page.locator(`[data-node-id="${id}"] .node-box`);
 
-test('snaps nodes and unrelated edges, with a switch to disable snapping', async ({ page }) => {
+test('[TC-CANVAS-2.1-01] snaps nodes and unrelated edges, with a switch to disable snapping', {
+  tag: ['@SPEC-2.1'],
+}, async ({ page }) => {
   await open(page);
   await drag(page, { x: 400, y: 100 }, { x: 305, y: 105 });
   await expect(node(page, 'class:B')).toHaveAttribute('x', '250');
@@ -44,7 +46,11 @@ test('snaps nodes and unrelated edges, with a switch to disable snapping', async
   await expect(node(page, 'class:C')).toHaveAttribute('y', '70');
 });
 
-test('resize, fit all text, undo and file reload preserve node adjustments', async ({ page }) => {
+test('[TC-CANVAS-2.4-01] resize, fit all text, undo and file reload preserve node adjustments', {
+  tag: ['@SPEC-2.4', '@SPEC-5.3', '@SPEC-5.2'],
+}, async ({ page }) => {
+  // OS 저장 창은 자동화할 수 없다. 저장 창이 없는 브라우저처럼 만들어 다운로드 경로로 파일을 받는다.
+  await page.addInitScript(() => Object.defineProperty(window, 'showSaveFilePicker', { value: undefined }));
   await open(page, 'classDiagram\nclass A {\n+first: string\n+second: string\n+third: string\n+fourthLongAttributeName: string\n+save()\n}\nclass B');
   await node(page, 'class:A').click();
   await expect(page.locator('[data-node-id="class:A"] text[data-content]')).toHaveCount(6);
@@ -67,7 +73,9 @@ test('resize, fit all text, undo and file reload preserve node adjustments', asy
   await expect(node(page, 'class:A')).toHaveAttribute('height', '150');
 });
 
-test('edge dragging, bend editing, reset and undo work without moving endpoints', async ({ page }) => {
+test('[TC-CANVAS-2.3-01] edge dragging, bend editing, reset and undo work without moving endpoints', {
+  tag: ['@SPEC-2.3', '@SPEC-2.2', '@SPEC-5.3'],
+}, async ({ page }) => {
   await open(page);
   await drag(page, { x: 300, y: 126 }, { x: 300, y: 206 });
   const editor = page.getByRole('textbox', { name: 'Mermaid 코드' });
@@ -88,7 +96,9 @@ test('edge dragging, bend editing, reset and undo work without moving endpoints'
   await expect(page.locator('.bend-handle')).toHaveCount(2);
 });
 
-test('Escape and pointer cancellation do not commit; pointerup uses its final coordinates', async ({ page }) => {
+test('[TC-CANVAS-2.1-02] Escape and pointer cancellation do not commit; pointerup uses its final coordinates', {
+  tag: ['@SPEC-2.1', '@SPEC-5.3'],
+}, async ({ page }) => {
   await open(page);
   await page.getByRole('checkbox', { name: '노드·간선 스냅' }).uncheck();
   const editor = page.getByRole('textbox', { name: 'Mermaid 코드' });
@@ -109,7 +119,9 @@ test('Escape and pointer cancellation do not commit; pointerup uses its final co
   await expect(editor).toHaveValue(original);
 });
 
-test('critical sequence messages retain edited bends after code changes', async ({ page }) => {
+test('[TC-CANVAS-2.3-02] critical sequence messages retain edited bends after code changes', {
+  tag: ['@SPEC-2.3', '@SPEC-3.1'],
+}, async ({ page }) => {
   await page.goto('/');
   const editor = page.getByRole('textbox', { name: 'Mermaid 코드' });
   await editor.fill('sequenceDiagram\ncritical main\nA->>B: request\noption retry\nB-->>A: wait\nend');

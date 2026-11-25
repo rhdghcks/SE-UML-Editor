@@ -10,6 +10,11 @@ import { MermaidPreview } from './MermaidPreview';
 import { MermaidRenderer } from '../adapters/mermaid-renderer';
 import { LocalFileManager } from '../adapters/local-file-manager';
 import { DiagramCanvas } from './DiagramCanvas';
+import { CanvasSvgRenderer } from '../adapters/canvas-svg-renderer';
+import { SvgImageExporter, type ImageFormat } from '../adapters/svg-image-exporter';
+import { isAbortError, saveBlob } from '../adapters/download-blob';
+import type { IFileManager, IImageExporter } from '../core/contracts';
+import { nodeIds } from '../core/types';
 import { AlignmentSnap } from '../adapters/alignment-snap';
 import { writeRoute } from '../core/route-editing';
 import { canvasEdges } from '../core/diagram-geometry';
@@ -42,10 +47,22 @@ const store: DiagramStore = new DiagramStore(new MermaidParser(new BasicMermaidP
   (model, boxes, added) => interaction.complete(arrangeClasses(model, boxes, added)));
 const COLORS = ['#000000', '#ffffff', '#e8eefb', '#dff2e5', '#fff0ce', '#f9dfdf', '#e9ddf7'];
 
-const files = new LocalFileManager();
+const defaultFiles = new LocalFileManager();
 const renderer = new MermaidRenderer();
+const defaultExporter = new SvgImageExporter(new CanvasSvgRenderer(), 2);
+const EXPORT_FILE: Record<ImageFormat, string> = { png: 'diagram.png', jpeg: 'diagram.jpg' };
+const DISCARD_MESSAGE = '저장하지 않은 변경이 있어요. 계속하면 지금 작업이 사라져요. 계속할까요?';
+const SAVE_BLOCKED_MESSAGE = '코드 오류를 수정한 뒤 저장하세요.';
 
-export function App() {
+const message = (error: unknown) => error instanceof Error ? error.message : String(error);
+
+interface AppProps {
+  exporter?: IImageExporter;
+  saveImage?: (filename: string, produce: () => Promise<Blob>) => Promise<void>;
+  files?: IFileManager & { reset?(): void };
+}
+
+export function App({ exporter = defaultExporter, saveImage = saveBlob, files = defaultFiles }: AppProps = {}) {
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const [selected, setSelected] = useState<string | null>(null);
   const currentNode = selected ? snapshot.layout[selected] : undefined;
@@ -53,6 +70,8 @@ export function App() {
   const [nodeName, setNodeName] = useState('');
   const [standard, setStandard] = useState(false);
   const [fileError, setFileError] = useState('');
+  const [savedSource, setSavedSource] = useState(() => store.getSnapshot().source);
+  const dirty = snapshot.source !== savedSource;
   const [snapEnabled, setSnapEnabled] = useState(true);
   function updateRoute(key: string, points: Array<{ x: number; y: number }>) {
     const current = store.getSnapshot();
@@ -69,30 +88,126 @@ export function App() {
     typing.current.lastInput = now;
     store.updateSource(source, typing.current.group);
   }
-  useEffect(() => {
-    function onHistoryKey(event: KeyboardEvent) {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.isComposing ||
-          event.key.toLowerCase() !== 'z' || event.target instanceof HTMLInputElement) return;
-      event.preventDefault();
-      if (event.shiftKey) store.redo();
-      else store.undo();
-    }
-    window.addEventListener('keydown', onHistoryKey);
-    return () => window.removeEventListener('keydown', onHistoryKey);
-  }, []);
+
+  const confirmDiscard = () => !dirty || window.confirm(DISCARD_MESSAGE);
+  const documentGeneration = useRef(0);
+  const opened = () => {
+    documentGeneration.current++;
+    files.reset?.();
+    setSelected(null);
+    setSavedSource(store.getSnapshot().source);
+  };
+  const openExample = (source: string) => {
+    if (!confirmDiscard()) return;
+    store.openSource(source);
+    opened();
+  };
+
   const request = useRef(0);
   const openFile = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file || !confirmDiscard()) return;
     const ticket = ++request.current;
     const revision = store.getSnapshot().revision;
     try {
       const source = await files.read(file);
       if (ticket !== request.current || revision !== store.getSnapshot().revision) return;
       store.openSource(source);
-      setSelected(null);
+      opened();
       setFileError('');
-    } catch (error) { if (ticket === request.current) setFileError(String(error)); }
+    } catch (error) {
+      if (ticket === request.current) setFileError(`열 수 없는 파일이에요. ${message(error)}`);
+    }
   };
+
+  const [saveBlocked, setSaveBlocked] = useState(false);
+  useEffect(() => { if (!snapshot.error) setSaveBlocked(false); }, [snapshot.error]);
+  const saving = useRef(false);
+  const saveFile = async () => {
+    if (saving.current) return;
+    const { source, error } = store.getSnapshot();
+    if (error) {
+      setSaveBlocked(true);
+      return;
+    }
+    const generation = documentGeneration.current;
+    saving.current = true;
+    try {
+      await files.write(store.getPersistedSource());
+      if (generation !== documentGeneration.current) return;
+      setSavedSource(source);
+      setFileError('');
+    } catch (failure) {
+      if (!isAbortError(failure)) setFileError(`파일을 저장하지 못했습니다: ${message(failure)}`);
+    } finally {
+      saving.current = false;
+    }
+  };
+
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<ImageFormat>('png');
+  const [exporting, setExporting] = useState(false);
+  const exportRequest = useRef(0);
+  const canExport = !snapshot.error && nodeIds(snapshot.model).length > 0;
+  const closeExport = () => {
+    ++exportRequest.current; // 진행 중인 내보내기 결과는 버린다.
+    setExporting(false);
+    setExportOpen(false);
+  };
+  const exportImage = async () => {
+    const ticket = ++exportRequest.current;
+    const format = exportFormat;
+    setExporting(true);
+    try {
+      await saveImage(EXPORT_FILE[format], async () => {
+        const blob = await exporter.export(store.getSnapshot(), format);
+        if (ticket !== exportRequest.current) throw new DOMException('내보내기를 취소했습니다.', 'AbortError');
+        return blob;
+      });
+      if (ticket !== exportRequest.current) return;
+      setExportOpen(false);
+      setFileError('');
+    } catch (error) {
+      if (ticket === exportRequest.current && !isAbortError(error)) {
+        setFileError(`이미지를 내보내지 못했습니다: ${message(error)}`);
+      }
+    } finally {
+      if (ticket === exportRequest.current) setExporting(false);
+    }
+  };
+
+  const shortcuts = useRef({ saveFile, exportOpen });
+  shortcuts.current = { saveFile, exportOpen };
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.isComposing) return;
+      const key = event.key.toLowerCase();
+      if (key === 's') {
+        event.preventDefault();
+        if (!event.repeat) void shortcuts.current.saveFile();
+        return;
+      }
+      if (shortcuts.current.exportOpen || event.target instanceof HTMLInputElement) return;
+      const undo = key === 'z' && !event.shiftKey;
+      const redo = (key === 'z' && event.shiftKey) || (key === 'y' && !event.shiftKey);
+      if (!undo && !redo) return;
+      event.preventDefault();
+      typing.current.lastInput = -Infinity;
+      if (undo) store.undo();
+      else store.redo();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = true; // preventDefault를 무시하는 이전 브라우저용
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
 
   return <main className="app">
     <header className="app-header">
@@ -101,17 +216,40 @@ export function App() {
         <p>공통 모델과 편집 흐름을 확인하는 개발용 화면</p>
       </div>
       <div className="actions">
-        <button onClick={() => { store.openSource(CLASS_EXAMPLE); setSelected(null); }}>클래스 예제</button>
-        <button onClick={() => { store.openSource(SEQUENCE_EXAMPLE); setSelected(null); }}>시퀀스 예제</button>
-        <button disabled={!store.canUndo()} onClick={store.undo}>Undo</button>
-        <button disabled={!store.canRedo()} onClick={store.redo}>Redo</button>
+        <button onClick={() => openExample(CLASS_EXAMPLE)}>클래스 예제</button>
+        <button onClick={() => openExample(SEQUENCE_EXAMPLE)}>시퀀스 예제</button>
+        <button disabled={!store.canUndo()} onClick={store.undo} title="Ctrl+Z">Undo</button>
+        <button disabled={!store.canRedo()} onClick={store.redo} title="Ctrl+Shift+Z">Redo</button>
       </div>
     </header>
     <div className="toolbar">
       <label className="file-input">.mmd 열기<input type="file" accept=".mmd,.txt,text/plain"
         onChange={(event) => { void openFile(event.target.files?.[0]); event.target.value = ''; }} /></label>
-      <button disabled={Boolean(snapshot.error)} onClick={() => void files.write(store.getPersistedSource()).catch(error => setFileError(String(error)))}>파일 저장</button>
-      {fileError && <span role="alert">{fileError}</span>}
+      <button disabled={Boolean(snapshot.error)} onClick={() => void saveFile()} title="Ctrl+S">파일 저장</button>
+      <button disabled={!canExport} onClick={() => setExportOpen(true)}>내보내기</button>
+      {exportOpen && <div className="modal-backdrop"
+        onClick={event => { if (event.target === event.currentTarget) closeExport(); }}
+        onKeyDown={event => { if (event.key === 'Escape') closeExport(); }}>
+        <div role="dialog" aria-modal="true" aria-labelledby="export-title" className="modal">
+          <h2 id="export-title">이미지 내보내기</h2>
+          <fieldset>
+            <legend>이미지 형식</legend>
+            {(['png', 'jpeg'] as const).map(format => <label key={format}>
+              <input type="radio" name="export-format" value={format} autoFocus={exportFormat === format}
+                checked={exportFormat === format} onChange={() => setExportFormat(format)} />
+              {format === 'png' ? 'PNG' : 'JPG'}
+            </label>)}
+          </fieldset>
+          <div className="modal-actions">
+            <button onClick={closeExport}>취소</button>
+            <button className="primary" disabled={!canExport || exporting} onClick={() => void exportImage()}>
+              {exporting ? '내보내는 중…' : '이미지 저장'}
+            </button>
+          </div>
+        </div>
+      </div>}
+      {(saveBlocked && snapshot.error) ? <span role="alert">{SAVE_BLOCKED_MESSAGE}</span>
+        : fileError && <span role="alert">{fileError}</span>}
       <button onClick={() => setStandard(!standard)}>{standard ? '편집 캔버스' : 'Mermaid 미리보기'}</button>
       <form onSubmit={event => {
         event.preventDefault();
@@ -125,7 +263,7 @@ export function App() {
           onChange={event => setNodeName(event.target.value)} />
         <button disabled={!nodeName || Boolean(snapshot.error)}>객체 추가</button>
       </form>
-      <span>revision {snapshot.revision} · {snapshot.model.kind === 'class' ? 'Class' : 'Sequence'}</span>
+      <span>revision {snapshot.revision} · {snapshot.model.kind === 'class' ? 'Class' : 'Sequence'}{dirty ? ' · 저장 안 됨' : ''}</span>
       <label><input type="checkbox" checked={snapEnabled} onChange={event => {
         snap.enabled = event.target.checked; setSnapEnabled(event.target.checked);
       }} /> 노드·간선 스냅</label>

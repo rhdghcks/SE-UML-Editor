@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-test('class layout displays saved bends and keeps the routed edge after code edits', async ({ page }) => {
+test('[TC-SYNC-3.1-03] class layout displays saved bends and keeps the routed edge after code edits', {
+  tag: ['@SPEC-3.1', '@SPEC-2.3'],
+}, async ({ page }) => {
   await page.goto('/');
   const code = page.getByRole('textbox', { name: 'Mermaid 코드' });
   const route = { key: JSON.stringify(['class:A', '-->', 'class:B', 0]), points: [{ x: 320, y: 350 }] };
@@ -12,8 +14,10 @@ test('class layout displays saved bends and keeps the routed edge after code edi
   await expect(page.locator('g.canvas-node')).toHaveCount(3);
 });
 
-for (const [header, keyword] of [['classDiagram', 'class'], ['sequenceDiagram', 'participant']]) {
-  test(header + ' renders 30 objects within one second and undoes an invalid draft', async ({ page }) => {
+for (const [id, header, keyword] of [['TC-CMN-9.2-01', 'classDiagram', 'class'], ['TC-CMN-9.2-02', 'sequenceDiagram', 'participant']]) {
+  test(`[${id}] ${header} renders 30 objects within one second and undoes an invalid draft`, {
+    tag: ['@SPEC-9.2', '@SPEC-1.1', '@SPEC-1.2', '@SPEC-5.3'],
+  }, async ({ page }) => {
     await page.goto('/');
     const editor = page.getByRole('textbox', { name: 'Mermaid 코드' });
     const source = [header, ...Array.from({ length: 30 }, (_, i) => keyword + ' Node' + i)].join('\n');

@@ -78,7 +78,7 @@ function parseClass(lines: SourceLine[]): ClassDiagram {
     }
     fail(line, '지원하지 않는 클래스 다이어그램 문법');
   }
-  if (openClass) fail(classStart, '클래스의 중괄호가 닫히지 않았습니다');
+  if (openClass) fail(classStart, `${openClass.name} 클래스의 중괄호가 닫히지 않았습니다`);
   return { kind: 'class', nodes: [...nodes.values()], relations };
 }
 
@@ -135,9 +135,9 @@ function parseSequence(lines: SourceLine[]): SequenceDiagram {
       continue;
     }
 
-    const blockStart = line.text.match(/^(alt|opt|loop|critical)\s+(.+)$/);
+    const blockStart = line.text.match(/^(alt|opt|loop|critical)(?:\s+(.+))?$/);
     if (blockStart) {
-      const branch: SequenceBranch = { label: blockStart[2], steps: [] };
+      const branch: SequenceBranch = { label: blockStart[2] ?? '', steps: [] };
       const block: SequenceBlock = { id: `block:${index++}`, kind: 'block',
         operator: blockStart[1] as SequenceBlock['operator'], branches: [branch] };
       append(block);
@@ -166,7 +166,7 @@ function parseSequence(lines: SourceLine[]): SequenceDiagram {
     fail(line, '지원하지 않는 시퀀스 다이어그램 문법');
   }
   const unclosed = stack.at(-1);
-  if (unclosed) fail(unclosed.start, 'alt/opt/loop/critical 블록의 end가 빠졌습니다');
+  if (unclosed) fail(unclosed.start, `${unclosed.block.operator} 블록의 end가 빠졌습니다`);
   return { kind: 'sequence', participants: [...participants.values()], steps };
 }
 
