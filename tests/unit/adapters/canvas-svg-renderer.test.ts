@@ -26,7 +26,7 @@ describe('CanvasSvgRenderer: 편집 캔버스를 단독 SVG로 만든다 [SPEC-6
       store.moveNode('class:Invoice', 517, 333);
       store.setNodeColor('class:Invoice', '#fff0ce');
       const svg = await renderer.render(store.getSnapshot());
-      expect(svg).toMatch(/<rect x="517" y="333"[^>]*fill="#fff0ce"/);
+      expect(svg).toMatch(/<rect[^>]* x="517" y="333"[^>]*fill="#fff0ce"/);
     });
 
     it('CSS 없이도 같은 크기·글꼴이 되도록 width·height를 viewBox와 맞추고 font-family를 붙인다', async () => {

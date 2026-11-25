@@ -1,0 +1,209 @@
+// @vitest-environment jsdom
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { useState, useSyncExternalStore } from 'react';
+import { DiagramCanvas } from '../../../src/ui/DiagramCanvas';
+import { DiagramStore } from '../../../src/core/diagram-store';
+import { writeRoute } from '../../../src/core/route-editing';
+import { readRoutes } from '../../../src/core/manual-routes';
+import { BasicMermaidParser } from '../../../src/adapters/basic-mermaid-parser';
+import { GridLayout } from '../../../src/adapters/grid-layout';
+import type { BendPoint } from '../../../src/core/manual-routes';
+
+// jsdom에는 SVG 좌표 변환과 포인터 캡처가 없다. 화면 좌표 = SVG 좌표(항등 변환)로 둔다.
+beforeAll(() => {
+  const identity = { inverse: () => identity };
+  Object.defineProperty(SVGElement.prototype, 'getScreenCTM', { configurable: true, value: () => identity });
+  Object.defineProperty(Element.prototype, 'setPointerCapture', { configurable: true, value: () => {} });
+  Object.defineProperty(SVGElement.prototype, 'getComputedTextLength', {
+    configurable: true, value(this: SVGElement) { return (this.textContent ?? '').length * 10; },
+  });
+  vi.stubGlobal('DOMPoint', class {
+    constructor(public x = 0, public y = 0) {}
+    matrixTransform() { return { x: this.x, y: this.y }; }
+  });
+});
+
+const BOXES = {
+  'class:A': { x: 60, y: 70, width: 190, height: 112, color: '#ffffff', placement: 'auto' },
+  'class:B': { x: 350, y: 70, width: 190, height: 112, color: '#ffffff', placement: 'auto' },
+};
+const classSource = (code = 'classDiagram\nA --> B') =>
+  `${code}\n%% @se-uml-layout ${JSON.stringify({ version: 1, nodes: BOXES })}`;
+
+interface Options { disabled?: boolean; snap?: (point: BendPoint, id: string) => BendPoint; failRoute?: boolean }
+
+/** App.tsx와 같은 방식으로 캔버스 콜백을 실제 DiagramStore에 연결한다. */
+function setup(source = classSource(), options: Options = {}) {
+  const store = new DiagramStore(new BasicMermaidParser(), new GridLayout(), source);
+  const errors: string[] = [];
+  const releases = { begun: 0, released: 0 };
+  function Harness() {
+    const document = useSyncExternalStore(store.subscribe, store.getSnapshot);
+    const [selected, setSelected] = useState<string | null>(null);
+    return <DiagramCanvas document={document} disabled={options.disabled ?? false}
+      selected={selected} onSelect={setSelected} onMove={store.moveNode} onResize={store.resizeNode}
+      onRouteChange={(key, points) => {
+        if (options.failRoute) throw new Error('간선을 바꿀 수 없습니다.');
+        store.updateSource(writeRoute(store.getSnapshot().source, key, points));
+      }}
+      onError={message => { if (message) errors.push(message); }}
+      onInteractionStart={() => { releases.begun++; return () => { releases.released++; }; }}
+      snapNode={options.snap ?? (point => point)} />;
+  }
+  const view = render(<Harness />);
+  const svg = view.container.querySelector<SVGSVGElement>('svg.diagram-svg')!;
+  const box = (id: string) => view.container.querySelector(`[data-node-id="${id}"] .node-box`)!;
+  const at = (x: number, y: number, extra: object = {}) => ({ clientX: x, clientY: y, pointerId: 1, button: 0, ...extra });
+  const drag = (target: Element, from: [number, number], to: [number, number]) => {
+    fireEvent.pointerDown(target, at(...from));
+    fireEvent.pointerMove(svg, at(...to));
+    fireEvent.pointerUp(svg, at(...to));
+  };
+  const routes = () => readRoutes(store.getSnapshot().source);
+  return { store, view, svg, box, at, drag, routes, errors, releases };
+}
+
+describe('DiagramCanvas ↔ DiagramStore 포인터 편집 [SPEC-2.1]', () => {
+  it('노드를 드래그하면 스냅을 거친 좌표가 코드에 반영되고 Undo 한 번으로 돌아간다 [SPEC-3.2][SPEC-5.3]', () => {
+    const snap = vi.fn((point: BendPoint) => ({ x: point.x - 5, y: point.y }));
+    const { store, box, drag, releases } = setup(classSource(), { snap });
+    drag(box('class:B'), [400, 100], [430, 140]);
+
+    expect(snap).toHaveBeenLastCalledWith({ x: 380, y: 110 }, 'class:B');
+    expect(store.getSnapshot().layout['class:B']).toMatchObject({ x: 375, y: 110, placement: 'manual' });
+    expect(releases).toEqual({ begun: 1, released: 1 });
+    store.undo();
+    expect(store.getSnapshot().layout['class:B']).toMatchObject({ x: 350, y: 70 });
+  });
+
+  it('제자리 클릭·Escape·pointercancel·다른 포인터는 위치를 바꾸지 않는다', () => {
+    const { store, svg, box, at, releases } = setup();
+    const before = store.getSnapshot();
+
+    fireEvent.pointerDown(box('class:A'), at(100, 100));
+    fireEvent.pointerUp(svg, at(100.2, 100.2));
+    fireEvent.pointerDown(box('class:A'), at(100, 100));
+    fireEvent.pointerMove(svg, at(170, 170));
+    fireEvent.keyDown(svg, { key: 'Escape' });
+    fireEvent.pointerUp(svg, at(170, 170));
+    fireEvent.pointerDown(box('class:A'), at(100, 100));
+    fireEvent.pointerMove(svg, at(170, 170, { pointerId: 2 }));
+    fireEvent.pointerCancel(svg, at(170, 170));
+    fireEvent.pointerDown(box('class:A'), at(100, 100, { button: 2 }));
+
+    expect(store.getSnapshot()).toBe(before);
+    expect(releases).toEqual({ begun: 3, released: 3 });
+  });
+
+  it('선택한 노드의 크기 조절 핸들로 크기를 바꾸고 최소 크기 아래로 줄지 않는다 [SPEC-2.4]', () => {
+    const { store, view, box, drag } = setup();
+    fireEvent.pointerDown(box('class:A'), { clientX: 100, clientY: 100, pointerId: 1, button: 0 });
+    fireEvent.pointerUp(view.container.querySelector('svg')!, { clientX: 100, clientY: 100, pointerId: 1 });
+    const handle = screen.getByLabelText('A 크기 조절');
+
+    drag(handle, [245, 177], [310, 240]);
+    expect(store.getSnapshot().layout['class:A']).toMatchObject({ width: 255, height: 175 });
+    drag(screen.getByLabelText('A 크기 조절'), [310, 240], [0, 0]);
+    expect(store.getSnapshot().layout['class:A']).toMatchObject({ width: 80, height: 55 });
+  });
+
+  it('텍스트에 맞추기는 가장 긴 줄과 멤버 수로 크기를 정한다 [SPEC-2.4]', () => {
+    const { store, box, svg, at } = setup(classSource('classDiagram\nclass A {\n+averyveryverylongattributename: string\n+save()\n}\nclass B'));
+    expect(screen.getByRole('button', { name: '텍스트에 맞추기' })).toBeDisabled();
+    fireEvent.pointerDown(box('class:A'), at(100, 100));
+    fireEvent.pointerUp(svg, at(100, 100));
+    fireEvent.click(screen.getByRole('button', { name: '텍스트에 맞추기' }));
+
+    // 가장 긴 줄 39자 × 10 + 여백 24 = 414, 높이 60 + 멤버 2개 × 18 = 96
+    expect(store.getSnapshot().layout['class:A']).toMatchObject({ width: 414, height: 96 });
+  });
+});
+
+describe('DiagramCanvas 간선 편집 [SPEC-2.3]', () => {
+  const handles = (container: HTMLElement) => container.querySelectorAll('.bend-handle');
+
+  it('간선을 끌면 꺾임점 두 개가 생기고 양 끝 노드는 움직이지 않는다 [SPEC-2.2][SPEC-3.2]', () => {
+    const { store, view, drag, routes } = setup();
+    const before = store.getSnapshot().layout;
+    drag(edgeOf(view.container), [300, 126], [300, 206]);
+
+    const [[, points]] = [...routes()];
+    expect(points).toHaveLength(2);
+    expect(points.every(point => point.y > 126)).toBe(true);
+    expect(store.getSnapshot().layout).toEqual(before);
+    expect(handles(view.container)).toHaveLength(2);
+  });
+
+  it('꺾임점 이동·삭제·추가·더블클릭 추가·초기화가 경로에 반영된다', () => {
+    const { view, drag, routes, at, svg } = setup();
+    drag(edgeOf(view.container), [300, 126], [300, 206]);
+    const first = handles(view.container)[0];
+    const cx = Number(first.getAttribute('cx')), cy = Number(first.getAttribute('cy'));
+
+    drag(first, [cx, cy], [cx + 20, cy + 25]);
+    expect([...routes().values()][0][0]).toEqual({ x: cx + 20, y: cy + 25 });
+
+    fireEvent.click(screen.getByRole('button', { name: '꺾임점 삭제' }));
+    expect([...routes().values()][0]).toHaveLength(1);
+    expect(screen.getByRole('button', { name: '꺾임점 삭제' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: '꺾임점 추가' }));
+    expect([...routes().values()][0]).toHaveLength(2);
+
+    fireEvent.doubleClick(edgeOf(view.container), at(300, 126));
+    expect([...routes().values()][0]).toHaveLength(3);
+
+    fireEvent.keyDown(svg, { key: 'Delete' });
+    expect([...routes().values()][0]).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: '경로 초기화' }));
+    // 초기화는 주석을 지우지 않고 꺾임점 없는 경로로 저장한다.
+    expect([...routes().values()][0]).toEqual([]);
+    expect(handles(view.container)).toHaveLength(0);
+  });
+
+  it('간선 변경이 거부되면 오류를 알리고 경로를 바꾸지 않는다 [SPEC-1.2]', () => {
+    const { view, drag, routes, errors } = setup(classSource(), { failRoute: true });
+    drag(edgeOf(view.container), [300, 126], [300, 206]);
+    expect(errors).toEqual(['간선을 바꿀 수 없습니다.']);
+    expect(routes().size).toBe(0);
+  });
+});
+
+describe('DiagramCanvas 상태 전이 [SPEC-1.2]', () => {
+  it('비활성화되면 조작을 받지 않고 마지막 정상 문서를 계속 그린다', () => {
+    const { store, box, drag, releases, view } = setup(classSource(), { disabled: true });
+    const before = store.getSnapshot();
+    drag(box('class:A'), [100, 100], [200, 200]);
+    fireEvent.doubleClick(edgeOf(view.container), { clientX: 300, clientY: 126 });
+
+    expect(store.getSnapshot()).toBe(before);
+    expect(releases.begun).toBe(0);
+    expect(view.container.querySelector('g.canvas-node.disabled')).not.toBeNull();
+    for (const name of ['텍스트에 맞추기', '꺾임점 추가', '꺾임점 삭제', '경로 초기화']) {
+      expect(screen.getByRole('button', { name })).toBeDisabled();
+    }
+  });
+
+  it('드래그 중 문서가 바뀌면 제스처를 취소하고 놓아도 반영하지 않는다 [SPEC-3.1]', () => {
+    const { store, svg, box, at, releases } = setup();
+    fireEvent.pointerDown(box('class:A'), at(100, 100));
+    fireEvent.pointerMove(svg, at(150, 150));
+    act(() => store.updateSource(classSource('classDiagram\nA --> B\nclass C')));
+    fireEvent.pointerMove(svg, at(170, 170));
+    fireEvent.pointerUp(svg, at(170, 170));
+
+    expect(store.getSnapshot().layout['class:A']).toMatchObject({ x: 60, y: 70 });
+    expect(releases).toEqual({ begun: 1, released: 1 });
+  });
+
+  it('시퀀스 다이어그램은 생명선과 블록 라벨을 그린다 [SPEC-1.3]', () => {
+    const { view } = setup('sequenceDiagram\nparticipant A\nparticipant B\nloop retry\nA->>B: ping\nend');
+    expect(view.container.querySelectorAll('line[stroke-dasharray="6 5"]')).toHaveLength(2);
+    expect(screen.getByText('loop: retry')).toBeInTheDocument();
+    expect(screen.getByText('ping')).toBeInTheDocument();
+  });
+});
+
+function edgeOf(container: HTMLElement) { return container.querySelector('g.canvas-edge')!; }

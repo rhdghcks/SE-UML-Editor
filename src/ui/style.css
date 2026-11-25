@@ -21,6 +21,14 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .canvas-node { cursor: grab; }
 .canvas-node:active { cursor: grabbing; }
 .canvas-node.disabled { cursor: not-allowed; }
+.canvas-editor { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.canvas-tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border-bottom: 1px solid #e2e6ee; font-size: 12px; }
+.canvas-tools span { flex-basis: 100%; color: #657187; }
+.canvas-edge { cursor: move; }
+.edge-hit { pointer-events: stroke; }
+.resize-handle { cursor: nwse-resize; }
+.bend-handle { cursor: move; }
+.diagram-svg:focus { outline: 2px solid #c2d6ff; outline-offset: -2px; }
 .selection-bar { padding: 12px; justify-content: flex-start; border-top: 1px solid #e2e6ee; font-size: 13px; min-height: 54px; }
 .swatch { width: 27px; height: 27px; border: 1px solid #9ea8b9; padding: 0; }
 footer { padding-top: 14px; color: #657187; font-size: 12px; }

@@ -22,6 +22,13 @@
 | TC-SYNC-3.1-03 | 시스템 | FR-3, FR-10 | 3.1, 2.3 | P1 | 사용자 흐름 | 편집기를 연 상태 | `@se-uml-route` 꺾임점이 있는 `A --> B` 코드 입력 → 코드에 `B --> C` 추가 | 간선이 저장된 꺾임점(320,350)을 지나고, 관계를 추가한 뒤에도 유지되며 노드가 3개 보인다. | [m2-layout.spec.ts](../tests/system/m2-layout.spec.ts) |
 | TC-CMN-9.2-01 | 시스템 | NFR-1, NFR-4 | 9.2, 1.1, 1.2, 5.3 | P1 | 경계값 | 편집기를 연 상태 | 클래스 30개 코드 입력 → 31번째 클래스 추가 → Ctrl+Z | 30개가 1초 안에 그려진다. 31개째에서 `30` 오류가 표시되고 노드는 30개로 유지된다. Ctrl+Z 후 30개 코드로 돌아오고 오류가 사라진다. | [m2-layout.spec.ts](../tests/system/m2-layout.spec.ts) |
 | TC-CMN-9.2-02 | 시스템 | NFR-1, NFR-4 | 9.2, 1.1, 1.2, 5.3 | P1 | 경계값 | 편집기를 연 상태 | 참여자 30명 시퀀스 코드로 TC-CMN-9.2-01과 같은 절차 | TC-CMN-9.2-01과 같다. | [m2-layout.spec.ts](../tests/system/m2-layout.spec.ts) |
+| TC-CODE-1.2-01 | 시스템 | FR-1 | 1.2 | P2 | 오류 추측 | 편집기를 연 상태 | 정상 시퀀스 코드 입력 → 주석·빈 줄 뒤에 활성화하지 않은 `deactivate B` 추가 | `7행: 활성화되지 않은 참여자: B` 오류가 표시되고 이전 메시지 `keep`이 캔버스에 남는다. | [editor.spec.ts](../tests/system/editor.spec.ts) |
+| TC-CANVAS-2.1-01 | 시스템 | FR-2 | 2.1 | P1 | 사용자 흐름 | 클래스 A, B를 배치한 상태 | B를 A 근처로 드래그 → Undo → 스냅 해제 후 같은 드래그 → 관계 간선 근처로 C 드래그 | 스냅 켜짐: B가 A 기준선(250, 70)에 붙는다. 스냅 해제: 놓은 위치(255, 75) 그대로다. C는 관련 없는 간선 높이(y 70)에 붙는다. | [m3-editing.spec.ts](../tests/system/m3-editing.spec.ts) |
+| TC-CANVAS-2.1-02 | 시스템 | FR-2 | 2.1, 5.3 | P1 | 오류 추측 | 스냅을 끈 상태 | 드래그 중 Escape → 드래그 후 마지막 좌표로 pointerup → Undo → 드래그 중 pointercancel | Escape와 pointercancel은 코드를 바꾸지 않는다. pointerup은 마지막 좌표(130, 140)로 확정되고 Undo로 원래 코드가 된다. | [m3-editing.spec.ts](../tests/system/m3-editing.spec.ts) |
+| TC-CANVAS-2.1-03 | 시스템 | FR-2, FR-12 | 2.1, 3.1, 5.3 | P1 | 오류 추측 | 자동 배치 모듈 응답을 지연시킨 상태 | `class Invoice` 입력 → 드래그 도중 자동 배치 완료 → 놓기 → Undo | 드래그가 취소되지 않고 놓은 위치로 확정되며, 자동 배치 결과가 Undo 단계를 추가하지 않는다. | [m3-layout-race.spec.ts](../tests/system/m3-layout-race.spec.ts) |
+| TC-CANVAS-2.3-01 | 시스템 | FR-9, FR-10 | 2.3, 2.2, 5.3 | P1 | 사용자 흐름 | 클래스 A, B를 배치한 상태 | 간선 중간 드래그 → 꺾임점 드래그 → 꺾임점 삭제 → 꺾임점 추가 → 경로 초기화 → Undo | 코드에 `@se-uml-route`가 생기고 꺾임점이 2개다. 노드 A는 움직이지 않는다. 삭제·추가·초기화가 꺾임점 수(1·2·0)에 반영되고 Undo 후 2개로 돌아온다. | [m3-editing.spec.ts](../tests/system/m3-editing.spec.ts) |
+| TC-CANVAS-2.3-02 | 시스템 | FR-10, FR-3 | 2.3, 3.1 | P2 | 사용자 흐름 | 편집기를 연 상태 | `critical`/`option` 시퀀스 입력 → 메시지 간선 꺾기 → 코드에서 블록 라벨 수정 | 라벨을 수정한 뒤에도 간선 경로가 같고 `option: retry` 라벨이 보인다. | [m3-editing.spec.ts](../tests/system/m3-editing.spec.ts) |
+| TC-CANVAS-2.4-01 | 시스템 | FR-11 | 2.4, 5.3, 5.2 | P1 | 사용자 흐름, 왕복 | 멤버가 많은 클래스 A를 연 상태 | 모서리 핸들로 크기 조절 → Undo → 텍스트에 맞추기 → 저장 → 다른 예제 → 저장 파일 열기 | 크기가 255×175로 바뀌고 Undo로 원래 너비가 된다. 텍스트에 맞추기 후 높이 150이고, 다시 연 파일에서 같은 크기가 복원된다. | [m3-editing.spec.ts](../tests/system/m3-editing.spec.ts) |
 
 ## 2. 요구사항 추적표 (자동 생성)
 

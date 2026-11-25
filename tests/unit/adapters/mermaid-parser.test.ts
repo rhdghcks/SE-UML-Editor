@@ -31,3 +31,16 @@ describe('M1 parser contract [SPEC-1.3]', () => {
     expect(basic.parse(output)).toEqual(model);
   });
 });
+
+it('locates inactive-participant errors and round-trips balanced nested activations [SPEC-1.3][SPEC-1.2]', () => {
+  const parser = new MermaidParser(basic, { parse() {
+    throw new Error('should reject before the runtime');
+  } });
+  expect(() => parser.parse('sequenceDiagram\r\nparticipant A\r\n%% comment\r\ndeactivate A'))
+    .toThrow('4행: 활성화되지 않은 참여자: A');
+  const source = 'sequenceDiagram\nparticipant A as 고객\nactor B as 담당자\nactivate B\nactivate B\nA->>B: 요청\n' +
+    'B-->>A: 응답\nA->B: 단방향\nB-->A: 확인\ndeactivate B\ndeactivate B';
+  const model = basic.parse(source);
+  validateModel(model);
+  expect(basic.parse(new BasicMermaidSerializer().serialize(model))).toEqual(model);
+});

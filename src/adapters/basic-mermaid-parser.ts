@@ -87,6 +87,7 @@ function parseSequence(lines: SourceLine[]): SequenceDiagram {
   const steps: SequenceStep[] = [];
   const stack: Array<{ block: SequenceBlock; current: SequenceBranch; start: SourceLine }> = [];
   let index = 0;
+  const activationCounts = new Map<string, number>();
   const ensureParticipant = (name: string, displayName = name,
     role?: 'participant' | 'actor') => {
     if (!participants.has(name)) participants.set(name, {
@@ -123,7 +124,11 @@ function parseSequence(lines: SourceLine[]): SequenceDiagram {
 
     const activation = line.text.match(new RegExp(`^(activate|deactivate)\\s+(${ID})$`));
     if (activation) {
-      ensureParticipant(activation[2]);
+      const [, action, name] = activation;
+      const active = activationCounts.get(name) ?? 0;
+      if (action === 'deactivate' && active === 0) fail(line, '활성화되지 않은 참여자: ' + name);
+      activationCounts.set(name, active + (action === 'activate' ? 1 : -1));
+      ensureParticipant(name);
       append({ id: `activation:${index++}`, kind: 'activation',
         target: `participant:${activation[2]}`,
         action: activation[1] as 'activate' | 'deactivate' });

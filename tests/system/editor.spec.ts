@@ -60,3 +60,16 @@ test('[TC-CODE-1.3-02] shows critical options in the team canvas and retains the
   await editor.fill(code.replace('권한 거부', '취소'));
   await expect.poll(svgSource).toContain('취소');
 });
+
+test('[TC-CODE-1.2-01] reports an inactive participant at its original line and keeps the previous canvas', {
+  tag: ['@SPEC-1.2'],
+}, async ({ page }) => {
+  await page.goto('/');
+  const editor = page.getByRole('textbox', { name: 'Mermaid 코드' });
+  const normal = 'sequenceDiagram\nparticipant A\nparticipant B\nA->>B: keep';
+  await editor.fill(normal);
+  await expect(page.getByText('keep', { exact: true })).toBeVisible();
+  await editor.fill(normal + '\n%% comment\n\ndeactivate B');
+  await expect(page.locator('.feedback.error')).toContainText('7행: 활성화되지 않은 참여자: B');
+  await expect(page.getByText('keep', { exact: true })).toBeVisible();
+});
