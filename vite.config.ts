@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  // 상대 경로 base: GitHub Pages(/SE-UML-Editor/)와 로컬 preview(/) 모두에서 자산을 찾는다.
+  // 상대 경로 base: 하위 경로에 두거나 로컬 preview(/)로 열어도 자산을 찾는다.
   base: './',
   plugins: [react()],
   test: {
