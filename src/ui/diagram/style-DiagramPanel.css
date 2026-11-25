@@ -24,6 +24,7 @@
 .diagram-container {
   display: flex;
   flex-direction: column;
+  min-height: 550px;
 
   /* 자신의 크기가 canvas-panel의 남는 높이만 차지하도록 설정 */
   flex-grow: 1;
@@ -46,6 +47,7 @@
 
 
 .canvas {
+  display: flex;
   flex: 1;
   overflow: auto;
 

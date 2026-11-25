@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { EditorSnapshot } from '../../../core/types';
-import { ClassDiagram } from './ClassDiagram';
+import { ClassDiagram } from './old_ClassDiagram';
 
 interface Props {
   snapshot: EditorSnapshot;
@@ -47,8 +47,59 @@ export function Canvas_UI({ snapshot, disabled, onMove, onChangeColor }: Props) 
     previousKind.current = modelKind;
   }, [snapshot]);
 
-
   const isNodeSelected = Boolean(selected && currentNode);
+
+  /////
+  const svg = useRef<SVGSVGElement>(null);
+  const canvas = svg.current;
+
+  const [centerX, setCenterX] = useState(0);
+  const [centerY, setCenterY] = useState(0);
+  const [zoomLevel, setZoomLevel] = useState(0);
+  const zoomScale = 1.1;
+  const baseSize = 200;
+  const canvasSize = baseSize / (zoomScale ** zoomLevel);
+
+  //받은 좌표를 중심점 좌표계로 변환해 리턴
+  function toCenterRect(
+    x: number,
+    y: number,
+    w: number,
+    h: number) {
+    return {
+      x: x - w / 2,
+      y: y - h / 2,
+      w,
+      h
+    };
+  }
+
+  function zoom(event: React.WheelEvent<SVGSVGElement>) {
+    event.preventDefault();
+
+    setZoomLevel(level =>
+      level + (event.deltaY < 0 ? 1 : -1)
+    );
+  }
+
+  function drawRect(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    props = {}) {
+    const pos = toCenterRect(x, y, w, h);
+
+    return (
+      <rect
+        {...props}
+        x={pos.x}
+        y={pos.y}
+        width={pos.w}
+        height={pos.h}
+      />
+    )
+  }
 
   return (
     <section className="canvas-UI">
@@ -70,9 +121,33 @@ export function Canvas_UI({ snapshot, disabled, onMove, onChangeColor }: Props) 
               />
           )}
         </div>
+
+        <span>pos : {centerX} {centerY}</span>
+        <span>size : {canvasSize}</span>
       </div>
 
+      {/* 캔버스 */}
+      <svg className="canvas" ref={svg}
+        viewBox={`${centerX - canvasSize / 2} ${centerY - canvasSize / 2} ${canvasSize} ${canvasSize}`}
+        onWheel={zoom}
+      >
+        {/* 내부 도형 그리기는 별도 클래스로 관리 */}
+        <g>
 
+          {drawRect(0, 0, 200, 100, {
+            fill: "#FF0000",
+          })}
+
+          <line
+            x1="0" y1="0"
+            x2="150" y2="100"
+            stroke="#000000"
+            strokeWidth="2" />
+        </g>
+
+      </svg>
+
+      {/*}
       <div className="canvas">
         {modelKind === 'class' ? (
           <ClassDiagram document={snapshot} disabled={disabled} selected={selected} onSelect={setSelected} onMove={onMove} />
@@ -82,8 +157,8 @@ export function Canvas_UI({ snapshot, disabled, onMove, onChangeColor }: Props) 
           <div>(IMSI)UNKNOWN</div>
         )}
       </div>
+*/}
 
-
-    </section>
+    </section >
   );
 }
