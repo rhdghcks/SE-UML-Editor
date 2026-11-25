@@ -13,7 +13,7 @@ export function fakeSavePicker() {
     abort: vi.fn(async () => {}),
   };
   const handle: SaveFileHandle = { createWritable: vi.fn(async () => writable) };
-  const show = vi.fn(async () => handle);
+  const show = vi.fn(async (_options?: { suggestedName?: string }) => handle);
   window.showSaveFilePicker = show;
   return { show, handle, writable, written };
 }

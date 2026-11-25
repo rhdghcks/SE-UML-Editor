@@ -41,7 +41,7 @@ npm run dev
 | IRenderer<T> | render(document) → Promise<T> | MermaidRenderer의 T는 SVG 문자열. 캔버스 이벤트는 렌더러 밖에서 처리한다. |
 | IDiagramStore | getSnapshot, subscribe, canUndo, canRedo, getPersistedSource | 동일 리비전은 동일 스냅샷 참조. 구독 해제 함수를 반환한다. |
 | IDiagramEditor | openSource/updateSource/addNode/moveNode/resizeNode/setNodeColor/undo/redo → void | 명령 하나당 성공 상태 한 번. DiagramStore 한 인스턴스가 읽기와 쓰기 계약을 구현한다. |
-| IFileManager | read(Blob) → Promise<string>, write(source) → Promise<void> | 열 파일 선택은 UI 소유. LocalFileManager의 write는 처음에만 OS 저장 창을 띄우고 이후 같은 파일에 쓴다. 저장 창이 없는 브라우저에서는 다운로드 요청이 성공이다. 사용자가 저장 창을 닫으면 AbortError로 reject하고 UI는 오류로 표시하지 않는다. 쓰기에 실패한 파일은 잊어서 다음 저장에서 저장 창을 다시 띄운다. 다른 문서를 열면 UI가 reset()을 불러 저장 위치를 잊게 하고, 그때 진행 중이던 쓰기의 파일도 새 문서에 넘기지 않는다. 저장 중에 들어온 저장 요청은 UI가 무시한다. |
+| IFileManager | read(Blob) → Promise<string>, write(source) → Promise<void> | 열 파일 선택은 UI 소유. LocalFileManager의 write는 저장할 때마다 OS 저장 창을 띄우고 새 파일로 저장한다. 이전에 저장한 파일을 덮어쓰지 않는다. 이름은 diagram.mmd, diagram(1).mmd, diagram(2).mmd … 순서로 제안하고, 번호는 실행 중 저장에 성공한 횟수다(다른 문서를 열어도 처음으로 돌아가지 않는다). 저장 창이 없는 브라우저에서는 같은 이름으로 다운로드를 요청하며 요청이 성공이다. 사용자가 저장 창을 닫으면 AbortError로 reject하고 UI는 오류로 표시하지 않는다. 저장 창을 닫거나 쓰기에 실패하면 번호를 올리지 않는다. 다른 문서를 열면 UI가 선택적 reset()을 부른다(LocalFileManager는 쓰지 않는다). 저장 중에 들어온 저장 요청은 UI가 무시한다. |
 | IImageExporter | export(document, 'png' 또는 'jpeg') → Promise<Blob> | SvgImageExporter가 IRenderer<string>(CanvasSvgRenderer)의 SVG를 canvas에 2배로 그린다. JPEG는 흰 배경. 크기 0·로드 실패·toBlob 실패는 reject. 파일 저장은 UI가 saveBlob으로 한다. saveBlob은 저장 창을 먼저 띄운 뒤 이미지를 만든다(사용자 활성화 만료 방지). |
 | ISnapStrategy | snap(point, id, layout) → LayoutChange | 동기 좌표 변환. Store 생성자의 선택적 네 번째 인수다. |
 
