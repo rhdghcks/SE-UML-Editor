@@ -1,10 +1,10 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, PointerEvent } from 'react';
 import type { DiagramDocument, NodeLayout } from '../core/types';
 import type { BendPoint } from '../core/manual-routes';
 import { canvasEdges, firstSequenceRow, nearestPoint, sequenceRows } from '../core/diagram-geometry';
 import type { CanvasEdge } from '../core/diagram-geometry';
-import { MAX_ZOOM, MIN_ZOOM, panViewport, zoomViewport } from './canvas-viewport';
+import { MAX_ZOOM, MIN_ZOOM, fitViewport, panViewport, zoomViewport } from './canvas-viewport';
 import type { CanvasViewport } from './canvas-viewport';
 
 interface Props {
@@ -50,6 +50,7 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
   const [panning, setPanning] = useState(false);
   const [viewport, setViewport] = useState<CanvasViewport>({ x: 0, y: 0, scale: 1 });
   const viewportRef = useRef(viewport);
+  const [fitRequest, requestFit] = useState(0);
   const releaseInteraction = useRef<(() => void) | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
@@ -78,6 +79,18 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
     release?.();
   }
   function setView(view: CanvasViewport) { viewportRef.current = view; setViewport(view); }
+  useLayoutEffect(() => {
+    if (!fitRequest || !world.current) return;
+    // Measure after cancelling a gesture has removed its temporary preview from the DOM.
+    const element = world.current;
+    const transform = element.getAttribute('transform');
+    // Text metrics can vary slightly with zoom. Measure at the same transform each time.
+    element.removeAttribute('transform');
+    let bounds: DOMRect;
+    try { bounds = element.getBBox(); }
+    finally { if (transform !== null) element.setAttribute('transform', transform); }
+    setView(fitViewport(bounds, { width, height }));
+  }, [fitRequest]);
   function cancel() {
     if (pan.current) setView(pan.current.view);
     pan.current = null; setPanning(false);
@@ -251,7 +264,7 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
       <button aria-label="캔버스 축소" disabled={viewport.scale <= MIN_ZOOM} onClick={() => zoom(1 / 1.2)}>−</button>
       <output className="canvas-zoom" aria-label="캔버스 배율">{Math.round(viewport.scale * 100)}%</output>
       <button aria-label="캔버스 확대" disabled={viewport.scale >= MAX_ZOOM} onClick={() => zoom(1.2)}>+</button>
-      <button onClick={() => { cancel(); setView({ x: 0, y: 0, scale: 1 }); }}>보기 초기화</button>
+      <button onClick={() => { cancel(); requestFit(value => value + 1); }}>보기 초기화</button>
       <button disabled={disabled || !selected || Boolean(selectedEdge)} onClick={fitText}>텍스트에 맞추기</button>
       <button disabled={disabled || !activeEdge || selectedBend === null} onClick={deleteBend}>꺾임점 삭제</button>
       <button disabled={disabled || !activeEdge || activeEdge.points.length === 2}

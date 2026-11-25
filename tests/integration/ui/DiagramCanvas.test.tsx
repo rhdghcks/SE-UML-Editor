@@ -14,6 +14,9 @@ import type { BendPoint } from '../../../src/core/manual-routes';
 beforeAll(() => {
   const identity = { inverse: () => identity };
   Object.defineProperty(SVGElement.prototype, 'getScreenCTM', { configurable: true, value: () => identity });
+  Object.defineProperty(SVGElement.prototype, 'getBBox', {
+    configurable: true, value: () => ({ x: 60, y: 70, width: 480, height: 112 }),
+  });
   Object.defineProperty(Element.prototype, 'setPointerCapture', { configurable: true, value: () => {} });
   Object.defineProperty(SVGElement.prototype, 'getComputedTextLength', {
     configurable: true, value(this: SVGElement) { return (this.textContent ?? '').length * 10; },
@@ -231,7 +234,7 @@ describe('DiagramCanvas 보기 조작과 문서 상태 연결 [SPEC-2.5]', () =>
     expect(screen.getByLabelText('캔버스 배율')).toHaveTextContent('25%');
     expect(screen.getByRole('button', { name: '캔버스 축소' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: '보기 초기화' }));
-    expect(screen.getByLabelText('캔버스 배율')).toHaveTextContent('100%');
+    expect(screen.getByLabelText('캔버스 배율')).toHaveTextContent('178%');
     expect(store.getSnapshot()).toBe(before);
     expect(store.canUndo()).toBe(false);
   });

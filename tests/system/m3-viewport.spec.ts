@@ -25,6 +25,22 @@ async function pan(page: Page) {
   await page.mouse.move(start.x + 45, start.y + 30); await page.mouse.up();
 }
 
+async function expectWholeDiagram(page: Page) {
+  const { frame, drawing } = await page.locator('svg.diagram-svg').evaluate((svg: SVGSVGElement) => {
+    const frame = svg.getBoundingClientRect();
+    const drawing = svg.querySelector('.canvas-world')!.getBoundingClientRect();
+    return { frame: { left: frame.left, right: frame.right, top: frame.top, bottom: frame.bottom },
+      drawing: { left: drawing.left, right: drawing.right, top: drawing.top, bottom: drawing.bottom } };
+  });
+  expect(drawing.left).toBeGreaterThan(frame.left + 1);
+  expect(drawing.right).toBeLessThan(frame.right - 1);
+  expect(drawing.top).toBeGreaterThan(frame.top + 1);
+  expect(drawing.bottom).toBeLessThan(frame.bottom - 1);
+  // Glyph hinting under the fitted transform can shift the visible text bounds by a CSS pixel.
+  expect(Math.abs((drawing.left + drawing.right - frame.left - frame.right) / 2)).toBeLessThan(2);
+  expect(Math.abs((drawing.top + drawing.bottom - frame.top - frame.bottom) / 2)).toBeLessThan(2);
+}
+
 test('[TC-CANVAS-2.5-01] 휠 확대는 커서를 기준으로 하며 화면 이동은 문서와 페이지 스크롤을 바꾸지 않는다', { tag: ['@SPEC-2.5'] }, async ({ page }) => {
   await open(page);
   const point = await screen(page, 300, 200);
@@ -86,7 +102,29 @@ test('[TC-CANVAS-2.5-03] 보기 초기화는 배율·위치를 복구하고 Esca
   await expect(page.locator('.canvas-world')).toHaveAttribute('transform', before!);
   await pan(page);
   await page.getByRole('button', { name: '보기 초기화', exact: true }).click();
-  await expect(page.getByLabel('캔버스 배율')).toHaveText('100%');
-  await expect(page.locator('.canvas-world')).toHaveAttribute('transform', 'translate(0 0) scale(1)');
+  await expectWholeDiagram(page);
   await expect(page.getByRole('textbox', { name: 'Mermaid 코드' })).toHaveValue(source);
 });
+
+for (const [id, kind, code] of [
+  ['04', '클래스', `classDiagram\nA --> B : ${'long relation label '.repeat(24)}`],
+  ['05', '시퀀스', `sequenceDiagram\ncritical ${'long block title '.repeat(24)}\nA->>B: request\noption retry\nB-->>A: response\nend`],
+]) {
+  test(`[TC-CANVAS-2.5-${id}] ${kind}의 긴 라벨까지 보기 초기화로 캔버스 안에 표시한다`, {
+    tag: ['@SPEC-2.5'],
+  }, async ({ page }) => {
+    await open(page);
+    const editor = page.getByRole('textbox', { name: 'Mermaid 코드' });
+    await editor.fill(code + '\n' + source.split('\n').at(-1));
+    await expect(page.locator('.feedback.error')).toHaveCount(0);
+    const original = await editor.inputValue();
+    await page.getByRole('button', { name: '캔버스 확대', exact: true }).click();
+    await pan(page);
+    await page.getByRole('button', { name: '보기 초기화', exact: true }).click();
+    await expectWholeDiagram(page);
+    await expect(editor).toHaveValue(original);
+    const fitted = await page.locator('.canvas-world').getAttribute('transform');
+    await page.getByRole('button', { name: '보기 초기화', exact: true }).click();
+    await expect(page.locator('.canvas-world')).toHaveAttribute('transform', fitted!);
+  });
+}
