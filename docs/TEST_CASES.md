@@ -26,9 +26,16 @@
 | TC-CANVAS-2.1-01 | 시스템 | FR-2 | 2.1 | P1 | 사용자 흐름 | 클래스 A, B를 배치한 상태 | B를 A 근처로 드래그 → Undo → 스냅 해제 후 같은 드래그 → 관계 간선 근처로 C 드래그 | 스냅 켜짐: B가 A 기준선(250, 70)에 붙는다. 스냅 해제: 놓은 위치(255, 75) 그대로다. C는 관련 없는 간선 높이(y 70)에 붙는다. | [m3-editing.spec.ts](../tests/system/m3-editing.spec.ts) |
 | TC-CANVAS-2.1-02 | 시스템 | FR-2 | 2.1, 5.3 | P1 | 오류 추측 | 스냅을 끈 상태 | 드래그 중 Escape → 드래그 후 마지막 좌표로 pointerup → Undo → 드래그 중 pointercancel | Escape와 pointercancel은 코드를 바꾸지 않는다. pointerup은 마지막 좌표(130, 140)로 확정되고 Undo로 원래 코드가 된다. | [m3-editing.spec.ts](../tests/system/m3-editing.spec.ts) |
 | TC-CANVAS-2.1-03 | 시스템 | FR-2, FR-12 | 2.1, 3.1, 5.3 | P1 | 오류 추측 | 자동 배치 모듈 응답을 지연시킨 상태 | `class Invoice` 입력 → 드래그 도중 자동 배치 완료 → 놓기 → Undo | 드래그가 취소되지 않고 놓은 위치로 확정되며, 자동 배치 결과가 Undo 단계를 추가하지 않는다. | [m3-layout-race.spec.ts](../tests/system/m3-layout-race.spec.ts) |
-| TC-CANVAS-2.3-01 | 시스템 | FR-9, FR-10 | 2.3, 2.2, 5.3 | P1 | 사용자 흐름 | 클래스 A, B를 배치한 상태 | 간선 중간 드래그 → 꺾임점 드래그 → 꺾임점 삭제 → 꺾임점 추가 → 경로 초기화 → Undo | 코드에 `@se-uml-route`가 생기고 꺾임점이 2개다. 노드 A는 움직이지 않는다. 삭제·추가·초기화가 꺾임점 수(1·2·0)에 반영되고 Undo 후 2개로 돌아온다. | [m3-editing.spec.ts](../tests/system/m3-editing.spec.ts) |
+| TC-CANVAS-2.3-01 | 시스템 | FR-9, FR-10 | 2.3, 2.2, 5.3 | P1 | 사용자 흐름 | 클래스 A, B를 배치한 상태 | 라벨 더블클릭·직선 드래그 시 미생성 확인 → 선 직접 더블클릭 두 번 → 간선·꺾임점 드래그 → 삭제 → 선 더블클릭으로 추가 → 경로 초기화 → Undo | 코드에 `@se-uml-route`가 생기고 꺾임점이 2개다. 노드 A는 움직이지 않는다. 삭제·추가·초기화가 꺾임점 수(1·2·0)에 반영되고 Undo 후 2개로 돌아온다. | [m3-editing.spec.ts](../tests/system/m3-editing.spec.ts) |
 | TC-CANVAS-2.3-02 | 시스템 | FR-10, FR-3 | 2.3, 3.1 | P2 | 사용자 흐름 | 편집기를 연 상태 | `critical`/`option` 시퀀스 입력 → 메시지 간선 꺾기 → 코드에서 블록 라벨 수정 | 라벨을 수정한 뒤에도 간선 경로가 같고 `option: retry` 라벨이 보인다. | [m3-editing.spec.ts](../tests/system/m3-editing.spec.ts) |
 | TC-CANVAS-2.4-01 | 시스템 | FR-11 | 2.4, 5.3, 5.2 | P1 | 사용자 흐름, 왕복 | 멤버가 많은 클래스 A를 연 상태 | 모서리 핸들로 크기 조절 → Undo → 텍스트에 맞추기 → 저장 → 다른 예제 → 저장 파일 열기 | 크기가 255×175로 바뀌고 Undo로 원래 너비가 된다. 텍스트에 맞추기 후 높이 150이고, 다시 연 파일에서 같은 크기가 복원된다. | [m3-editing.spec.ts](../tests/system/m3-editing.spec.ts) |
+
+| TC-CANVAS-2.5-01 | 시스템 | 추가 요청 | 2.5 | P2 | 사용자 흐름 | A, B 배치 주석이 있는 코드 입력 | 커서 아래 위치에서 휠 확대 → 빈 공간 드래그 | 커서 아래 문서 위치와 페이지 스크롤이 유지된다. 화면은 드래그한 45×30 CSS 픽셀만큼 이동하며 원문과 노드 x=60은 그대로다. | [m3-viewport.spec.ts](../tests/system/m3-viewport.spec.ts) |
+| TC-CANVAS-2.5-02 | 시스템 | FR-2, FR-10, FR-8, 추가 요청 | 2.5, 2.1, 2.3, 5.3 | P1 | 상태 전이 | A(60,70), B 배치 후 스냅 해제 | 확대·화면 이동 → A를 문서 좌표로 (42,24) 이동 → Undo → 선 더블클릭 | A가 (102,94)가 된다. Undo는 A만 복구하고 보기를 유지한다. 새 꺾임점은 클릭한 선의 문서 좌표에 생긴다. | [m3-viewport.spec.ts](../tests/system/m3-viewport.spec.ts) |
+| TC-CANVAS-2.5-03 | 시스템 | 추가 요청 | 2.5 | P2 | 상태 전이 | A, B 배치 주석이 있는 코드 입력 | + 버튼 → 빈 공간 드래그 중 Esc → 다시 화면 이동 → 보기 초기화 | +는 120%를 표시한다. Esc는 이동 전 보기로 돌아간다. 초기화는 다이어그램 전체를 여백 안에 맞추고 가운데 정렬하며 원문은 그대로다. | [m3-viewport.spec.ts](../tests/system/m3-viewport.spec.ts) |
+
+| TC-CANVAS-2.5-04 | 시스템 | 추가 요청 | 2.5 | P2 | 오류 추측 | 긴 관계 라벨을 가진 클래스 A → B | 확대·화면 이동 → 보기 초기화 → 초기화 반복 | 노드와 긴 라벨이 모두 캔버스 안에 여백을 두고 보이며 가운데 정렬된다. 원문은 그대로이고 반복 초기화 결과가 같다. | [m3-viewport.spec.ts](../tests/system/m3-viewport.spec.ts) |
+| TC-CANVAS-2.5-05 | 시스템 | 추가 요청 | 2.5 | P2 | 오류 추측 | 긴 critical 제목과 option을 가진 시퀀스 | 확대·화면 이동 → 보기 초기화 → 초기화 반복 | 참여자·메시지·생명선·긴 블록 제목이 모두 캔버스 안에 보인다. 원문은 그대로이고 반복 초기화 결과가 같다. | [m3-viewport.spec.ts](../tests/system/m3-viewport.spec.ts) |
 
 ## 2. 요구사항 추적표 (자동 생성)
 

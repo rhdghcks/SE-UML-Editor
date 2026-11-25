@@ -1,9 +1,11 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import type { PointerEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent, PointerEvent } from 'react';
 import type { DiagramDocument, NodeLayout } from '../core/types';
 import type { BendPoint } from '../core/manual-routes';
 import { canvasEdges, firstSequenceRow, nearestPoint, sequenceRows } from '../core/diagram-geometry';
 import type { CanvasEdge } from '../core/diagram-geometry';
+import { MAX_ZOOM, MIN_ZOOM, fitViewport, panViewport, zoomViewport } from './canvas-viewport';
+import type { CanvasViewport } from './canvas-viewport';
 
 interface Props {
   document: DiagramDocument;
@@ -31,12 +33,24 @@ interface Gesture {
   bend?: number;
   moved: boolean;
 }
+interface PanGesture {
+  pointerId: number;
+  start: BendPoint;
+  view: CanvasViewport;
+  document: DiagramDocument;
+}
 
 export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, onResize,
   onRouteChange, onError, onInteractionStart, snapNode }: Props) {
   const svg = useRef<SVGSVGElement>(null);
+  const world = useRef<SVGGElement>(null);
   const canvasId = useId().replace(/:/g, '');
   const gesture = useRef<Gesture | null>(null);
+  const pan = useRef<PanGesture | null>(null);
+  const [panning, setPanning] = useState(false);
+  const [viewport, setViewport] = useState<CanvasViewport>({ x: 0, y: 0, scale: 1 });
+  const viewportRef = useRef(viewport);
+  const [fitRequest, requestFit] = useState(0);
   const releaseInteraction = useRef<(() => void) | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
@@ -64,11 +78,43 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
     releaseInteraction.current = null;
     release?.();
   }
-  function cancel() { gesture.current = null; setPreview(null); releaseLayout(); }
+  function setView(view: CanvasViewport) { viewportRef.current = view; setViewport(view); }
+  useLayoutEffect(() => {
+    if (!fitRequest || !world.current) return;
+    // Measure after cancelling a gesture has removed its temporary preview from the DOM.
+    const element = world.current;
+    const transform = element.getAttribute('transform');
+    // Text metrics can vary slightly with zoom. Measure at the same transform each time.
+    element.removeAttribute('transform');
+    let bounds: DOMRect;
+    try { bounds = element.getBBox(); }
+    finally { if (transform !== null) element.setAttribute('transform', transform); }
+    setView(fitViewport(bounds, { width, height }));
+  }, [fitRequest]);
+  function cancel() {
+    if (pan.current) setView(pan.current.view);
+    pan.current = null; setPanning(false);
+    gesture.current = null; setPreview(null); releaseLayout();
+  }
   useEffect(() => {
-    if (disabled || (gesture.current && gesture.current.document !== document)) cancel();
+    if (disabled || (gesture.current && gesture.current.document !== document) ||
+        (pan.current && pan.current.document !== document)) cancel();
   }, [document, disabled]);
-  useEffect(() => () => { gesture.current = null; releaseLayout(); }, []);
+  useEffect(() => () => { gesture.current = null; pan.current = null; releaseLayout(); }, []);
+  useEffect(() => {
+    const element = svg.current;
+    if (!element) return;
+    function wheel(event: WheelEvent) {
+      event.preventDefault();
+      if (gesture.current || pan.current) return;
+      const point = rootPoint(event.clientX, event.clientY);
+      if (!point) return;
+      const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? element!.clientHeight : 1);
+      setView(zoomViewport(viewportRef.current, point, Math.exp(-Math.max(-500, Math.min(500, delta)) * 0.0015)));
+    }
+    element.addEventListener('wheel', wheel, { passive: false });
+    return () => element.removeEventListener('wheel', wheel);
+  }, []);
   useEffect(() => {
     if (!savedEdges.some(edge => edge.key === selectedEdge)) { setSelectedEdge(null); setSelectedBend(null); }
   }, [document, selectedEdge]);
@@ -77,18 +123,48 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
     catch (error) { onError(error instanceof Error ? error.message : String(error)); }
   }
   function svgPoint(clientX: number, clientY: number): BendPoint | null {
+    const matrix = world.current?.getScreenCTM();
+    if (!matrix) return null;
+    const point = new DOMPoint(clientX, clientY).matrixTransform(matrix.inverse());
+    return Number.isFinite(point.x) && Number.isFinite(point.y) ? { x: point.x, y: point.y } : null;
+  }
+  function rootPoint(clientX: number, clientY: number): BendPoint | null {
     const matrix = svg.current?.getScreenCTM();
     if (!matrix) return null;
     const point = new DOMPoint(clientX, clientY).matrixTransform(matrix.inverse());
     return Number.isFinite(point.x) && Number.isFinite(point.y) ? { x: point.x, y: point.y } : null;
   }
+  function beginPan(event: PointerEvent<SVGSVGElement>) {
+    if (gesture.current || pan.current) return;
+    const background = event.target === event.currentTarget ||
+      (event.target instanceof SVGElement && event.target.classList.contains('canvas-background'));
+    if (event.button !== 1 && !(event.button === 0 && background)) return;
+    const start = rootPoint(event.clientX, event.clientY);
+    if (!start) return;
+    event.preventDefault();
+    event.currentTarget.focus({ preventScroll: true });
+    event.currentTarget.setPointerCapture(event.pointerId);
+    releaseInteraction.current = onInteractionStart();
+    pan.current = { pointerId: event.pointerId, start, view: viewportRef.current, document };
+    setPanning(true); setSelectedEdge(null); setSelectedBend(null);
+  }
+  function zoom(factor: number) {
+    if (gesture.current || pan.current) return;
+    setView(zoomViewport(viewportRef.current, { x: width / 2, y: height / 2 }, factor));
+  }
   function begin(event: PointerEvent<SVGElement>, data: Omit<Gesture, 'pointerId' | 'start' | 'document' | 'moved'>) {
-    if (disabled || event.button !== 0 || gesture.current) return;
+    if (disabled || event.button !== 0 || gesture.current || pan.current) return;
     const start = svgPoint(event.clientX, event.clientY);
     if (!start) return;
     event.stopPropagation(); event.preventDefault();
     svg.current?.focus({ preventScroll: true });
-    event.currentTarget.setPointerCapture(event.pointerId);
+    // A straight line can be selected, but only a line double-click may create bends.
+    if (data.kind === 'edge' && data.edge?.points.length === 2) {
+      setSelectedEdge(data.id); setSelectedBend(null); return;
+    }
+    // Keep click/double-click targeted at the line, rather than retargeting them to its group.
+    const capture = data.kind === 'edge' && event.target instanceof SVGElement ? event.target : event.currentTarget;
+    capture.setPointerCapture(event.pointerId);
     releaseInteraction.current = onInteractionStart();
     gesture.current = { ...data, start, pointerId: event.pointerId, document, moved: false };
     if (data.kind === 'node' || data.kind === 'resize') {
@@ -112,10 +188,6 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
     if (current.kind === 'bend' && current.bend !== undefined) {
       bends[current.bend] = { x: Math.max(0, bends[current.bend].x + dx), y: Math.max(0, bends[current.bend].y + dy) };
     } else {
-      if (!bends.length) {
-        const a = edge.points[0], b = edge.points.at(-1)!;
-        bends = [1 / 3, 2 / 3].map(t => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }));
-      }
       const offsetX = Math.max(dx, -Math.min(...bends.map(p => p.x)));
       const offsetY = Math.max(dy, -Math.min(...bends.map(p => p.y)));
       bends = bends.map(p => ({ x: p.x + offsetX, y: p.y + offsetY }));
@@ -123,6 +195,12 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
     return { kind: 'route', key: edge.key, points: bends };
   }
   function move(event: PointerEvent<SVGSVGElement>) {
+    const movingView = pan.current;
+    if (movingView?.pointerId === event.pointerId) {
+      const point = rootPoint(event.clientX, event.clientY);
+      if (point) setView(panViewport(movingView.view, { x: point.x - movingView.start.x, y: point.y - movingView.start.y }));
+      return;
+    }
     const current = gesture.current;
     if (!current || current.pointerId !== event.pointerId) return;
     if (disabled || current.document !== document) { cancel(); return; }
@@ -134,6 +212,12 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
     });
   }
   function finish(event: PointerEvent<SVGSVGElement>) {
+    const movingView = pan.current;
+    if (movingView?.pointerId === event.pointerId) {
+      const point = rootPoint(event.clientX, event.clientY);
+      if (point) setView(panViewport(movingView.view, { x: point.x - movingView.start.x, y: point.y - movingView.start.y }));
+      pan.current = null; setPanning(false); releaseLayout(); return;
+    }
     const current = gesture.current;
     if (!current || current.pointerId !== event.pointerId) return;
     try {
@@ -148,13 +232,13 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
       });
     } finally { cancel(); }
   }
-  function addBend(edge: CanvasEdge, point?: BendPoint) {
+  function addBend(edge: CanvasEdge, point: BendPoint) {
     const bends = edge.points.slice(1, -1).map(p => ({ ...p }));
     let index = 0, best = Infinity, added = edge.points[0];
     for (let i = 1; i < edge.points.length; i++) {
       const a = edge.points[i - 1], b = edge.points[i];
-      const candidate = point ? nearestPoint(point, a, b) : { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-      const score = point ? Math.hypot(candidate.x - point.x, candidate.y - point.y) : -Math.hypot(b.x - a.x, b.y - a.y);
+      const candidate = nearestPoint(point, a, b);
+      const score = Math.hypot(candidate.x - point.x, candidate.y - point.y);
       if (score < best) { best = score; index = i - 1; added = candidate; }
     }
     bends.splice(index, 0, added);
@@ -176,38 +260,42 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
   }
   return <div className="canvas-editor">
     <div className="canvas-tools">
-      <span>노드: 드래그 · 오른쪽 아래 ■: 크기 조절 · 선: 드래그/더블클릭 · Esc: 취소</span>
+      <span>휠: 확대·축소 · 빈 공간 드래그: 화면 이동 · 선 더블클릭: 꺾임점 추가 · Esc: 취소</span>
+      <button aria-label="캔버스 축소" disabled={viewport.scale <= MIN_ZOOM} onClick={() => zoom(1 / 1.2)}>−</button>
+      <output className="canvas-zoom" aria-label="캔버스 배율">{Math.round(viewport.scale * 100)}%</output>
+      <button aria-label="캔버스 확대" disabled={viewport.scale >= MAX_ZOOM} onClick={() => zoom(1.2)}>+</button>
+      <button onClick={() => { cancel(); requestFit(value => value + 1); }}>보기 초기화</button>
       <button disabled={disabled || !selected || Boolean(selectedEdge)} onClick={fitText}>텍스트에 맞추기</button>
-      <button disabled={disabled || !activeEdge} onClick={() => activeEdge && addBend(activeEdge)}>꺾임점 추가</button>
       <button disabled={disabled || !activeEdge || selectedBend === null} onClick={deleteBend}>꺾임점 삭제</button>
       <button disabled={disabled || !activeEdge || activeEdge.points.length === 2}
         onClick={() => activeEdge && safely(() => { onRouteChange(activeEdge.key, []); setSelectedBend(null); })}>경로 초기화</button>
     </div>
-    <svg ref={svg} className="diagram-svg" tabIndex={0} aria-label="다이어그램 편집 캔버스"
-      viewBox={`0 0 ${width} ${height}`} onPointerMove={move} onPointerUp={finish}
-      onPointerCancel={event => { if (gesture.current?.pointerId === event.pointerId) cancel(); }}
-      onLostPointerCapture={event => { if (gesture.current?.pointerId === event.pointerId) cancel(); }}
+    <svg ref={svg} className={panning ? 'diagram-svg is-panning' : 'diagram-svg'} tabIndex={0} aria-label="다이어그램 편집 캔버스"
+      viewBox={`0 0 ${width} ${height}`} onPointerDown={beginPan} onPointerMove={move} onPointerUp={finish}
+      onPointerCancel={event => { if (gesture.current?.pointerId === event.pointerId || pan.current?.pointerId === event.pointerId) cancel(); }}
+      onLostPointerCapture={event => { if (gesture.current?.pointerId === event.pointerId || pan.current?.pointerId === event.pointerId) cancel(); }}
       onKeyDown={event => {
         if (event.key === 'Escape') { event.preventDefault(); cancel(); }
         if (!disabled && event.key === 'Delete' && selectedBend !== null) { event.preventDefault(); deleteBend(); }
       }}>
       <defs><marker id={`${canvasId}-arrow`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
         <path d="M 0 0 L 10 5 L 0 10 z" fill="#596579" /></marker></defs>
-      <rect width={width} height={height} fill="white" onPointerDown={() => { setSelectedEdge(null); setSelectedBend(null); }} />
+      <rect className="canvas-background" width={width} height={height} fill="white" />
+      <g ref={world} className="canvas-world" transform={`translate(${viewport.x} ${viewport.y}) scale(${viewport.scale})`}>
       {edges.map(edge => {
         const middle = edge.points[Math.floor(edge.points.length / 2)];
         const label = edge.points.length === 2 ? { x: (edge.points[0].x + edge.points[1].x) / 2, y: (edge.points[0].y + edge.points[1].y) / 2 } : middle;
         const pointString = edge.points.map(p => `${p.x},${p.y}`).join(' ');
-        return <g key={edge.key} data-route-key={edge.key} className="canvas-edge"
-          onPointerDown={event => begin(event, { kind: 'edge', id: edge.key, edge })}
-          onDoubleClick={event => {
+        const doubleClickLine = (event: ReactMouseEvent<SVGPolylineElement>) => {
             if (disabled) return;
             event.stopPropagation(); const point = svgPoint(event.clientX, event.clientY);
             if (point) addBend(edge, point);
-          }}>
-          <polyline className="edge-hit" points={pointString} fill="none" stroke="transparent" strokeWidth="14" />
+        };
+        return <g key={edge.key} data-route-key={edge.key} className="canvas-edge"
+          onPointerDown={event => begin(event, { kind: 'edge', id: edge.key, edge })}>
+          <polyline className="edge-hit" points={pointString} fill="none" stroke="transparent" strokeWidth="14" onDoubleClick={doubleClickLine} />
           <polyline className="edge-line" points={pointString} fill="none" stroke={selectedEdge === edge.key ? '#3367d6' : '#596579'}
-            strokeWidth="2" markerEnd={`url(#${canvasId}-arrow)`} />
+            strokeWidth="2" markerEnd={`url(#${canvasId}-arrow)`} onDoubleClick={doubleClickLine} />
           <text x={label.x} y={label.y - 10} textAnchor="middle" fontSize="15">{edge.label}</text>
           {selectedEdge === edge.key && edge.points.slice(1, -1).map((point, index) =>
             <circle key={index} className="bend-handle" aria-label={`꺾임점 ${index + 1}`} cx={point.x} cy={point.y} r="7"
@@ -248,6 +336,7 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
             onPointerDown={event => begin(event, { kind: 'resize', id: node.id, box: layout[node.id] })} />}
         </g>;
       })}
+      </g>
     </svg>
   </div>;
 }

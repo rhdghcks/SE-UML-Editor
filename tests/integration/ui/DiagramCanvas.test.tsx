@@ -14,6 +14,9 @@ import type { BendPoint } from '../../../src/core/manual-routes';
 beforeAll(() => {
   const identity = { inverse: () => identity };
   Object.defineProperty(SVGElement.prototype, 'getScreenCTM', { configurable: true, value: () => identity });
+  Object.defineProperty(SVGElement.prototype, 'getBBox', {
+    configurable: true, value: () => ({ x: 60, y: 70, width: 480, height: 112 }),
+  });
   Object.defineProperty(Element.prototype, 'setPointerCapture', { configurable: true, value: () => {} });
   Object.defineProperty(SVGElement.prototype, 'getComputedTextLength', {
     configurable: true, value(this: SVGElement) { return (this.textContent ?? '').length * 10; },
@@ -123,9 +126,16 @@ describe('DiagramCanvas ↔ DiagramStore 포인터 편집 [SPEC-2.1]', () => {
 describe('DiagramCanvas 간선 편집 [SPEC-2.3]', () => {
   const handles = (container: HTMLElement) => container.querySelectorAll('.bend-handle');
 
-  it('간선을 끌면 꺾임점 두 개가 생기고 양 끝 노드는 움직이지 않는다 [SPEC-2.2][SPEC-3.2]', () => {
-    const { store, view, drag, routes } = setup();
+  it('직선 드래그와 라벨 더블클릭은 점을 만들지 않고 선 더블클릭으로만 추가한다 [SPEC-2.2][SPEC-3.2]', () => {
+    const { store, view, drag, routes, at } = setup(classSource('classDiagram\nA --> B : relation'));
     const before = store.getSnapshot().layout;
+    drag(edgeOf(view.container), [300, 126], [300, 206]);
+    fireEvent.doubleClick(view.container.querySelector('.canvas-edge text')!, at(300, 116));
+    expect(routes().size).toBe(0);
+    expect(handles(view.container)).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: '꺾임점 추가' })).toBeNull();
+    fireEvent.doubleClick(edgeOf(view.container), at(280, 126));
+    fireEvent.doubleClick(edgeOf(view.container), at(320, 126));
     drag(edgeOf(view.container), [300, 126], [300, 206]);
 
     const [[, points]] = [...routes()];
@@ -135,9 +145,12 @@ describe('DiagramCanvas 간선 편집 [SPEC-2.3]', () => {
     expect(handles(view.container)).toHaveLength(2);
   });
 
-  it('꺾임점 이동·삭제·추가·더블클릭 추가·초기화가 경로에 반영된다', () => {
+  it('꺾임점 이동·삭제·선 더블클릭 추가·초기화가 경로에 반영된다', () => {
     const { view, drag, routes, at, svg } = setup();
-    drag(edgeOf(view.container), [300, 126], [300, 206]);
+    // 브라우저 더블클릭은 먼저 pointerdown/up으로 선을 선택한다.
+    drag(edgeOf(view.container), [280, 126], [280, 126]);
+    fireEvent.doubleClick(edgeOf(view.container), at(280, 126));
+    fireEvent.doubleClick(edgeOf(view.container), at(320, 126));
     const first = handles(view.container)[0];
     const cx = Number(first.getAttribute('cx')), cy = Number(first.getAttribute('cy'));
 
@@ -148,7 +161,7 @@ describe('DiagramCanvas 간선 편집 [SPEC-2.3]', () => {
     expect([...routes().values()][0]).toHaveLength(1);
     expect(screen.getByRole('button', { name: '꺾임점 삭제' })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: '꺾임점 추가' }));
+    fireEvent.doubleClick(edgeOf(view.container), at(300, 126));
     expect([...routes().values()][0]).toHaveLength(2);
 
     fireEvent.doubleClick(edgeOf(view.container), at(300, 126));
@@ -164,8 +177,8 @@ describe('DiagramCanvas 간선 편집 [SPEC-2.3]', () => {
   });
 
   it('간선 변경이 거부되면 오류를 알리고 경로를 바꾸지 않는다 [SPEC-1.2]', () => {
-    const { view, drag, routes, errors } = setup(classSource(), { failRoute: true });
-    drag(edgeOf(view.container), [300, 126], [300, 206]);
+    const { view, routes, errors, at } = setup(classSource(), { failRoute: true });
+    fireEvent.doubleClick(edgeOf(view.container), at(300, 126));
     expect(errors).toEqual(['간선을 바꿀 수 없습니다.']);
     expect(routes().size).toBe(0);
   });
@@ -181,7 +194,7 @@ describe('DiagramCanvas 상태 전이 [SPEC-1.2]', () => {
     expect(store.getSnapshot()).toBe(before);
     expect(releases.begun).toBe(0);
     expect(view.container.querySelector('g.canvas-node.disabled')).not.toBeNull();
-    for (const name of ['텍스트에 맞추기', '꺾임점 추가', '꺾임점 삭제', '경로 초기화']) {
+    for (const name of ['텍스트에 맞추기', '꺾임점 삭제', '경로 초기화']) {
       expect(screen.getByRole('button', { name })).toBeDisabled();
     }
   });
@@ -206,4 +219,49 @@ describe('DiagramCanvas 상태 전이 [SPEC-1.2]', () => {
   });
 });
 
-function edgeOf(container: HTMLElement) { return container.querySelector('g.canvas-edge')!; }
+describe('DiagramCanvas 보기 조작과 문서 상태 연결 [SPEC-2.5]', () => {
+  it('휠과 보기 버튼은 문서·Undo를 바꾸지 않고 배율 제한과 초기화를 적용한다', () => {
+    const { store, svg } = setup();
+    const before = store.getSnapshot();
+    fireEvent.wheel(svg, { clientX: 300, clientY: 200, deltaY: -200, deltaMode: 0 });
+    expect(screen.getByLabelText('캔버스 배율')).toHaveTextContent('135%');
+    fireEvent.click(screen.getByRole('button', { name: '캔버스 확대' }));
+    fireEvent.click(screen.getByRole('button', { name: '캔버스 축소' }));
+    for (let i = 0; i < 10; i++) fireEvent.wheel(svg, { deltaY: -500 });
+    expect(screen.getByLabelText('캔버스 배율')).toHaveTextContent('400%');
+    expect(screen.getByRole('button', { name: '캔버스 확대' })).toBeDisabled();
+    for (let i = 0; i < 10; i++) fireEvent.wheel(svg, { deltaY: 500, deltaMode: 1 });
+    expect(screen.getByLabelText('캔버스 배율')).toHaveTextContent('25%');
+    expect(screen.getByRole('button', { name: '캔버스 축소' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '보기 초기화' }));
+    expect(screen.getByLabelText('캔버스 배율')).toHaveTextContent('178%');
+    expect(store.getSnapshot()).toBe(before);
+    expect(store.canUndo()).toBe(false);
+  });
+
+  it('화면 이동은 빈 공간 왼쪽·가운데 버튼으로 시작하고 취소·문서 교체·해제에서 배치 대기를 끝낸다', () => {
+    const { store, svg, view, box, at, drag, releases } = setup();
+    const world = view.container.querySelector('.canvas-world')!;
+    const background = view.container.querySelector('.canvas-background')!;
+    const before = store.getSnapshot();
+    drag(background, [600, 200], [645, 230]);
+    expect(world).toHaveAttribute('transform', 'translate(45 30) scale(1)');
+    fireEvent.pointerDown(box('class:A'), at(100, 100, { button: 1 }));
+    fireEvent.pointerMove(svg, at(150, 140));
+    fireEvent.keyDown(svg, { key: 'Escape' });
+    fireEvent.pointerUp(svg, at(150, 140));
+    expect(world).toHaveAttribute('transform', 'translate(45 30) scale(1)');
+    expect(store.getSnapshot()).toBe(before);
+    fireEvent.pointerDown(background, at(600, 200));
+    fireEvent.pointerMove(svg, at(650, 250, { pointerId: 2 }));
+    fireEvent.wheel(svg, { deltaY: -200 });
+    expect(world).toHaveAttribute('transform', 'translate(45 30) scale(1)');
+    act(() => store.updateSource(classSource('classDiagram\nA --> B\nclass C')));
+    expect(world).toHaveAttribute('transform', 'translate(45 30) scale(1)');
+    fireEvent.pointerDown(background, at(600, 200));
+    view.unmount();
+    expect(releases).toEqual({ begun: 4, released: 4 });
+  });
+});
+
+function edgeOf(container: HTMLElement) { return container.querySelector('g.canvas-edge .edge-line')!; }
