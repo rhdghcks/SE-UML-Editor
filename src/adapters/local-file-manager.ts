@@ -1,39 +1,30 @@
 import type { IFileManager } from '../core/contracts';
-import { downloadBlob, pickSaveFile, writeFile, type SaveFileHandle } from './download-blob';
+import { downloadBlob, pickSaveFile, writeFile } from './download-blob';
 
-const FILENAME = 'diagram.mmd';
+/** n번째 저장의 파일 이름. 0 → diagram.mmd, 1 → diagram(1).mmd, 2 → diagram(2).mmd … */
+export function versionedName(n: number) {
+  return n === 0 ? 'diagram.mmd' : `diagram(${n}).mmd`;
+}
 
 export class LocalFileManager implements IFileManager {
-  private handle?: SaveFileHandle;
-  private generation = 0;
+  /** 이번 실행에서 저장에 성공한 횟수. 다음 저장 이름의 번호가 된다. */
+  private saved = 0;
 
   read(file: Blob) { return file.text(); }
 
   /**
-   * 처음 저장이면 OS 저장 창을 띄우고, 그다음부터는 같은 파일에 쓴다.
-   * 저장 창이 없는 브라우저는 다운로드를 요청한다. 사용자가 저장 창을 닫으면 AbortError로 reject한다.
-   * 쓰기에 실패한 파일(삭제·이동·권한 회수)은 잊어서 다음 저장에서 저장 창을 다시 띄운다.
+   * 저장할 때마다 새 파일로 저장한다. 이전에 저장한 파일을 덮어쓰지 않는다.
+   * OS 저장 창에 diagram.mmd, diagram(1).mmd, diagram(2).mmd … 순서로 이름을 미리 채운다.
+   * 저장 창이 없는 브라우저는 같은 이름으로 다운로드를 요청한다.
+   * 사용자가 저장 창을 닫거나(AbortError) 쓰기에 실패하면 번호를 올리지 않아, 다음 저장이 같은 이름을 다시 제안한다.
+   * 번호는 다른 문서를 열어도 처음으로 돌아가지 않는다. 앞서 저장한 파일 이름을 다시 제안하지 않기 위해서다.
    */
   async write(source: string) {
-    const generation = this.generation;
+    const filename = versionedName(this.saved);
     const blob = new Blob([source], { type: 'text/plain;charset=utf-8' });
-    const handle = this.handle ?? await pickSaveFile(FILENAME);
-    if (!handle) {
-      downloadBlob(blob, FILENAME);
-      return;
-    }
-    try {
-      await writeFile(handle, blob);
-    } catch (error) {
-      if (this.handle === handle) this.handle = undefined;
-      throw error;
-    }
-    if (generation === this.generation) this.handle = handle;
-  }
-
-  /** 다른 문서를 열었을 때 부른다. 다음 저장은 다시 저장 창을 띄운다. */
-  reset() {
-    this.handle = undefined;
-    this.generation++;
+    const handle = await pickSaveFile(filename);
+    if (handle) await writeFile(handle, blob);
+    else downloadBlob(blob, filename);
+    this.saved++;
   }
 }

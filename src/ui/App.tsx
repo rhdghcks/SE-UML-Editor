@@ -13,6 +13,7 @@ import { DiagramCanvas } from './DiagramCanvas';
 import { CanvasSvgRenderer } from '../adapters/canvas-svg-renderer';
 import { SvgImageExporter, type ImageFormat } from '../adapters/svg-image-exporter';
 import { isAbortError, saveBlob } from '../adapters/download-blob';
+import { grayscaleBlob, type ColorMode } from '../adapters/grayscale-image';
 import type { IFileManager, IImageExporter } from '../core/contracts';
 import { nodeIds } from '../core/types';
 import { AlignmentSnap } from '../adapters/alignment-snap';
@@ -53,16 +54,20 @@ const defaultExporter = new SvgImageExporter(new CanvasSvgRenderer(), 2);
 const EXPORT_FILE: Record<ImageFormat, string> = { png: 'diagram.png', jpeg: 'diagram.jpg' };
 const DISCARD_MESSAGE = '저장하지 않은 변경이 있어요. 계속하면 지금 작업이 사라져요. 계속할까요?';
 const SAVE_BLOCKED_MESSAGE = '코드 오류를 수정한 뒤 저장하세요.';
+const EDITED_WHILE_OPENING = '파일을 불러오는 사이 문서가 바뀌어 파일을 열지 않았어요. 다시 열어 주세요.';
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 
 interface AppProps {
   exporter?: IImageExporter;
   saveImage?: (filename: string, produce: () => Promise<Blob>) => Promise<void>;
+  toGrayscale?: (image: Blob) => Promise<Blob>;
   files?: IFileManager & { reset?(): void };
 }
 
-export function App({ exporter = defaultExporter, saveImage = saveBlob, files = defaultFiles }: AppProps = {}) {
+export function App({
+  exporter = defaultExporter, saveImage = saveBlob, toGrayscale = grayscaleBlob, files = defaultFiles,
+}: AppProps = {}) {
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const [selected, setSelected] = useState<string | null>(null);
   const currentNode = selected ? snapshot.layout[selected] : undefined;
@@ -73,6 +78,18 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
   const [savedSource, setSavedSource] = useState(() => store.getSnapshot().source);
   const dirty = snapshot.source !== savedSource;
   const [snapEnabled, setSnapEnabled] = useState(true);
+  // 사용자 명령으로 문서가 실제로 바뀐 횟수. 백그라운드 자동 배치와, 아무것도 바꾸지 않았거나 실패한 명령은 세지 않는다.
+  // 파일을 읽는 사이 사용자가 편집했는지 판단할 때 쓴다.
+  const userEdits = useRef(0);
+  function edit(command: () => void) {
+    const before = store.getSnapshot();
+    try {
+      command();
+    } finally {
+      if (store.getSnapshot() !== before) userEdits.current++;
+    }
+  }
+  const byUser = <A extends unknown[]>(command: (...args: A) => void) => (...args: A) => edit(() => command(...args));
   function updateRoute(key: string, points: Array<{ x: number; y: number }>) {
     const current = store.getSnapshot();
     if (current.error) throw new Error('코드 오류를 수정한 뒤 편집하세요.');
@@ -86,7 +103,7 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
     const now = performance.now();
     if (now - typing.current.lastInput > 700) typing.current.group = Symbol();
     typing.current.lastInput = now;
-    store.updateSource(source, typing.current.group);
+    edit(() => store.updateSource(source, typing.current.group));
   }
 
   const confirmDiscard = () => !dirty || window.confirm(DISCARD_MESSAGE);
@@ -99,7 +116,7 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
   };
   const openExample = (source: string) => {
     if (!confirmDiscard()) return;
-    store.openSource(source);
+    edit(() => store.openSource(source));
     opened();
   };
 
@@ -107,10 +124,15 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
   const openFile = async (file: File | undefined) => {
     if (!file || !confirmDiscard()) return;
     const ticket = ++request.current;
-    const revision = store.getSnapshot().revision;
+    // 읽는 사이 사용자가 편집했으면 파일로 덮지 않는다. 백그라운드 자동 배치(revision·배치 주석 변경)는 막지 않는다.
+    const edits = userEdits.current;
     try {
       const source = await files.read(file);
-      if (ticket !== request.current || revision !== store.getSnapshot().revision) return;
+      if (ticket !== request.current) return;
+      if (edits !== userEdits.current) {
+        setFileError(EDITED_WHILE_OPENING);
+        return;
+      }
       store.openSource(source);
       opened();
       setFileError('');
@@ -145,6 +167,7 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
 
   const [exportOpen, setExportOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<ImageFormat>('png');
+  const [exportColor, setExportColor] = useState<ColorMode>('color');
   const [exporting, setExporting] = useState(false);
   const exportRequest = useRef(0);
   const canExport = !snapshot.error && nodeIds(snapshot.model).length > 0;
@@ -156,10 +179,12 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
   const exportImage = async () => {
     const ticket = ++exportRequest.current;
     const format = exportFormat;
+    const color = exportColor;
     setExporting(true);
     try {
       await saveImage(EXPORT_FILE[format], async () => {
-        const blob = await exporter.export(store.getSnapshot(), format);
+        const exported = await exporter.export(store.getSnapshot(), format);
+        const blob = color === 'grayscale' ? await toGrayscale(exported) : exported;
         if (ticket !== exportRequest.current) throw new DOMException('내보내기를 취소했습니다.', 'AbortError');
         return blob;
       });
@@ -192,8 +217,7 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
       if (!undo && !redo) return;
       event.preventDefault();
       typing.current.lastInput = -Infinity;
-      if (undo) store.undo();
-      else store.redo();
+      edit(undo ? store.undo : store.redo);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -218,8 +242,8 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
       <div className="actions">
         <button onClick={() => openExample(CLASS_EXAMPLE)}>클래스 예제</button>
         <button onClick={() => openExample(SEQUENCE_EXAMPLE)}>시퀀스 예제</button>
-        <button disabled={!store.canUndo()} onClick={store.undo} title="Ctrl+Z">Undo</button>
-        <button disabled={!store.canRedo()} onClick={store.redo} title="Ctrl+Shift+Z">Redo</button>
+        <button disabled={!store.canUndo()} onClick={byUser(store.undo)} title="Ctrl+Z">Undo</button>
+        <button disabled={!store.canRedo()} onClick={byUser(store.redo)} title="Ctrl+Shift+Z">Redo</button>
       </div>
     </header>
     <div className="toolbar">
@@ -240,6 +264,14 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
               {format === 'png' ? 'PNG' : 'JPG'}
             </label>)}
           </fieldset>
+          <fieldset>
+            <legend>색상</legend>
+            {(['color', 'grayscale'] as const).map(color => <label key={color}>
+              <input type="radio" name="export-color" value={color}
+                checked={exportColor === color} onChange={() => setExportColor(color)} />
+              {color === 'color' ? '컬러' : '흑백'}
+            </label>)}
+          </fieldset>
           <div className="modal-actions">
             <button onClick={closeExport}>취소</button>
             <button className="primary" disabled={!canExport || exporting} onClick={() => void exportImage()}>
@@ -254,7 +286,7 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
       <form onSubmit={event => {
         event.preventDefault();
         try {
-          store.addNode(nodeName);
+          edit(() => store.addNode(nodeName));
           setNodeName('');
           setFileError('');
         } catch (error) { setFileError(String(error)); }
@@ -281,8 +313,8 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
       <section className="canvas-panel">
         <div className="panel-heading">캔버스 (개발용 미리보기)</div>
         {standard ? <MermaidPreview document={snapshot} renderer={renderer} /> : <DiagramCanvas document={snapshot} disabled={Boolean(snapshot.error)}
-          selected={selected} onSelect={setSelected} onMove={store.moveNode} onResize={store.resizeNode}
-          onRouteChange={updateRoute} onError={setFileError}
+          selected={selected} onSelect={setSelected} onMove={byUser(store.moveNode)} onResize={byUser(store.resizeNode)}
+          onRouteChange={byUser(updateRoute)} onError={setFileError}
           onInteractionStart={() => interaction.begin()}
           snapNode={(point, id) => snap.snap(point, id, store.getSnapshot().layout)} />}
         <div className="selection-bar">
@@ -291,7 +323,7 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
             <span>색상</span>
             {COLORS.map((color) => <button key={color} className="swatch"
               title={color} style={{ backgroundColor: color }} disabled={Boolean(snapshot.error)}
-              onClick={() => store.setNodeColor(selected, color)} />)}
+              onClick={byUser(() => store.setNodeColor(selected, color))} />)}
           </> : <span>노드를 선택하면 색상을 바꿀 수 있습니다.</span>}
         </div>
       </section>

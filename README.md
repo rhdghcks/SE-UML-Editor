@@ -30,10 +30,10 @@ npm run build
 - 노드 드래그·색상 변경 시 좌표/스타일을 Mermaid 주석 메타데이터에 저장
 - 코드에서 객체 추가 시 기존 노드의 수동 배치 유지
 - 최대 30개 노드 및 최근 5단계 실행 취소/다시 실행
-- `.mmd` 텍스트 파일 열기 및 저장 (Ctrl/Cmd+S, Chromium 계열은 처음 저장할 때 OS 저장 창)
+- `.mmd` 텍스트 파일 열기 및 저장 (Ctrl/Cmd+S. 저장할 때마다 덮어쓰지 않고 `diagram.mmd`, `diagram(1).mmd`, `diagram(2).mmd` … 새 파일로 저장. Chromium 계열은 매번 OS 저장 창에 이 이름을 미리 채움)
 - 저장하지 않은 변경이 있으면 열기·예제 전환·페이지 닫기 전에 확인
 - Ctrl/Cmd+Z 실행 취소, Ctrl/Cmd+Shift+Z·Ctrl+Y 다시 실행
-- **내보내기**로 편집 캔버스(수동 배치·색상 반영)를 PNG·JPG 이미지로 저장 (2배 해상도, JPG는 흰 배경, Chromium 계열은 OS 저장 창에서 위치 선택)
+- **내보내기**로 편집 캔버스(수동 배치·색상 반영)를 PNG·JPG 이미지로 저장 (컬러·흑백 선택, 2배 해상도, JPG는 흰 배경, Chromium 계열은 OS 저장 창에서 위치 선택)
 - 모듈별 교체를 위한 Parser / Serializer / Layout / Renderer / Editor 계약
 
 ## 현재 지원 문법 (예제 어댑터 한정)
