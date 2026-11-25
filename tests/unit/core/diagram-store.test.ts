@@ -21,7 +21,7 @@ describe('DiagramStore', () => {
     expect(createStore(saved).getSnapshot().layout['class:User'].y).toBe(158);
   });
 
-  it('keeps adjusted positions when new code introduces a node [SPEC-3.1]', () => {
+  it('[UT-06] keeps adjusted positions when new code introduces a node [SPEC-3.1]', () => {
     const store = createStore();
     store.moveNode('class:User', 407, 245);
     store.updateSource(`classDiagram\n  class User\n  class Account\n  class Invoice`);
@@ -43,7 +43,7 @@ describe('DiagramStore', () => {
     expect(store.getSnapshot().source).toBe(SAMPLE);
   });
 
-  it('supports five undo levels and redo [SPEC-5.3]', () => {
+  it('[UT-05] supports five undo levels and redo [SPEC-5.3]', () => {
     const store = createStore();
     for (let index = 1; index <= 7; index++) store.moveNode('class:User', index * 10, 70);
     for (let index = 0; index < 5; index++) store.undo();
@@ -68,7 +68,7 @@ describe('DiagramStore', () => {
     expect(listener).toHaveBeenCalledTimes(3);
   });
 
-  it('rejects more than 30 canvas nodes [SPEC-9.2]', () => {
+  it('[UT-04] rejects more than 30 canvas nodes [SPEC-9.2]', () => {
     const store = createStore();
     const source = 'classDiagram\n' + Array.from({ length: 31 }, (_, index) =>
       `class Node${index}`).join('\n');

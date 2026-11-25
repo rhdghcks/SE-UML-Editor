@@ -15,7 +15,7 @@ const readJson = (path) => (existsSync(resolve(ROOT, path)) ? JSON.parse(read(pa
 
 const LEVELS = ['단위', '통합', '시스템', '인수'];
 const SPEC_RE = /SPEC-(\d+\.\d+)/g;
-const TC_RE = /TC-[A-Z]+-\d+\.\d+-\d{2}/;
+const TC_RE = /\b(?:UT|IT|ST|AT)-\d{2}\b/;
 
 // ── 기능명세: 번호 → 기능명, SRS 요구사항 ──────────────────────────────
 function loadSpec() {

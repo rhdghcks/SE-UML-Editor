@@ -26,7 +26,7 @@ async function drag(page: Page, from: { x: number; y: number }, to: { x: number;
 }
 const node = (page: Page, id: string) => page.locator(`[data-node-id="${id}"] .node-box`);
 
-test('[TC-CANVAS-2.1-01] snaps nodes and unrelated edges, with a switch to disable snapping', {
+test('[ST-05] snaps nodes and unrelated edges, with a switch to disable snapping', {
   tag: ['@SPEC-2.1'],
 }, async ({ page }) => {
   await open(page);
@@ -46,7 +46,7 @@ test('[TC-CANVAS-2.1-01] snaps nodes and unrelated edges, with a switch to disab
   await expect(node(page, 'class:C')).toHaveAttribute('y', '70');
 });
 
-test('[TC-CANVAS-2.4-01] resize, fit all text, undo and file reload preserve node adjustments', {
+test('[ST-19] resize, fit all text, undo and file reload preserve node adjustments', {
   tag: ['@SPEC-2.4', '@SPEC-5.3', '@SPEC-5.2'],
 }, async ({ page }) => {
   // OS 저장 창은 자동화할 수 없다. 저장 창이 없는 브라우저처럼 만들어 다운로드 경로로 파일을 받는다.
@@ -73,7 +73,7 @@ test('[TC-CANVAS-2.4-01] resize, fit all text, undo and file reload preserve nod
   await expect(node(page, 'class:A')).toHaveAttribute('height', '150');
 });
 
-test('[TC-CANVAS-2.3-01] edge dragging, bend editing, reset and undo work without moving endpoints', {
+test('[ST-17] edge dragging, bend editing, reset and undo work without moving endpoints', {
   tag: ['@SPEC-2.3', '@SPEC-2.2', '@SPEC-5.3'],
 }, async ({ page }) => {
   await open(page);
@@ -96,7 +96,7 @@ test('[TC-CANVAS-2.3-01] edge dragging, bend editing, reset and undo work withou
   await expect(page.locator('.bend-handle')).toHaveCount(2);
 });
 
-test('[TC-CANVAS-2.1-02] Escape and pointer cancellation do not commit; pointerup uses its final coordinates', {
+test('[ST-15] Escape and pointer cancellation do not commit; pointerup uses its final coordinates', {
   tag: ['@SPEC-2.1', '@SPEC-5.3'],
 }, async ({ page }) => {
   await open(page);
@@ -119,7 +119,7 @@ test('[TC-CANVAS-2.1-02] Escape and pointer cancellation do not commit; pointeru
   await expect(editor).toHaveValue(original);
 });
 
-test('[TC-CANVAS-2.3-02] critical sequence messages retain edited bends after code changes', {
+test('[ST-18] critical sequence messages retain edited bends after code changes', {
   tag: ['@SPEC-2.3', '@SPEC-3.1'],
 }, async ({ page }) => {
   await page.goto('/');

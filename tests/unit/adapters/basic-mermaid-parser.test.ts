@@ -23,7 +23,7 @@ const asBlock = (step: SequenceDiagram['steps'][number]): SequenceBlock => {
 };
 
 describe('starter Mermaid adapters', () => {
-  it('parses class declarations, members and relationships [SPEC-1.3]', () => {
+  it('[UT-01] parses class declarations, members and relationships [SPEC-1.3]', () => {
     const model = parser.parse(`classDiagram
 class User {
 +name: string
@@ -38,7 +38,7 @@ User --> Account : uses`);
     expect(parser.parse(serializer.serialize(model))).toEqual(model);
   });
 
-  it('parses nested sequence blocks [SPEC-1.3]', () => {
+  it('[UT-02] parses nested sequence blocks [SPEC-1.3]', () => {
     const model = parser.parse(`sequenceDiagram
 participant A
 participant B
@@ -56,7 +56,7 @@ end`);
     expect(parser.parse(serializer.serialize(model))).toEqual(model);
   });
 
-  it('rejects unsupported syntax instead of dropping it [SPEC-1.2]', () => {
+  it('[UT-03] rejects unsupported syntax instead of dropping it [SPEC-1.2]', () => {
     expect(() => parser.parse('sequenceDiagram\npar A')).toThrow('2행');
     expect(() => parser.parse('sequenceDiagram\nend')).toThrow('2행');
   });
@@ -384,7 +384,7 @@ end`));
 });
 
 // 검증 대상: 사용성(오류 품질). 팀 계약 "행 번호가 있는 문법 오류"를 모든 실패 경로에 대해 확인한다.
-describe('오류 품질: 행 번호와 원문 [SPEC-1.2]', () => {
+describe('[UT-03] 오류 품질: 행 번호와 원문 [SPEC-1.2]', () => {
   it.each([
     ['미지원 클래스 문법', 'classDiagram\n\nnamespace X', 3, 'namespace X'],
     ['미지원 시퀀스 문법', 'sequenceDiagram\nnote over A: hi', 2, 'note over A: hi'],

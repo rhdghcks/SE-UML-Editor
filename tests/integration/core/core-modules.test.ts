@@ -10,7 +10,7 @@ const sample = 'classDiagram\r\n%% 팀 메모\r\nclass A  \r\n';
 const create = () => new DiagramStore(parser, new GridLayout(), sample);
 
 describe('공통 모듈 경계', () => {
-  it('원문과 수동 좌표를 독립적으로 복구한다 [SPEC-5.2]', () => {
+  it('[IT-05] 원문과 수동 좌표를 독립적으로 복구한다 [SPEC-5.2]', () => {
     const store = create();
     store.moveNode('class:A', 87, 44);
     const saved = store.getPersistedSource();
@@ -74,7 +74,7 @@ describe('공통 모듈 경계', () => {
     seq.participants = [];
     expect(() => validateModel(seq)).toThrow(/참조/);
   });
-  it('정확히 30개 참여자를 허용하고 다음 추가를 거부한다 [SPEC-9.2]', () => {
+  it('[UT-04] 정확히 30개 참여자를 허용하고 다음 추가를 거부한다 [SPEC-9.2]', () => {
     const store = create();
     const source = 'sequenceDiagram\n' + Array.from({ length: 30 }, (_, i) => 'participant P' + i).join('\n');
     store.updateSource(source);

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('[TC-SYNC-3.1-03] class layout displays saved bends and keeps the routed edge after code edits', {
+test('[ST-11] class layout displays saved bends and keeps the routed edge after code edits', {
   tag: ['@SPEC-3.1', '@SPEC-2.3'],
 }, async ({ page }) => {
   await page.goto('/');
@@ -14,7 +14,7 @@ test('[TC-SYNC-3.1-03] class layout displays saved bends and keeps the routed ed
   await expect(page.locator('g.canvas-node')).toHaveCount(3);
 });
 
-for (const [id, header, keyword] of [['TC-CMN-9.2-01', 'classDiagram', 'class'], ['TC-CMN-9.2-02', 'sequenceDiagram', 'participant']]) {
+for (const [id, header, keyword] of [['ST-01', 'classDiagram', 'class'], ['ST-01', 'sequenceDiagram', 'participant']]) {
   test(`[${id}] ${header} renders 30 objects within one second and undoes an invalid draft`, {
     tag: ['@SPEC-9.2', '@SPEC-1.1', '@SPEC-1.2', '@SPEC-5.3'],
   }, async ({ page }) => {

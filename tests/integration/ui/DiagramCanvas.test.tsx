@@ -65,7 +65,7 @@ function setup(source = classSource(), options: Options = {}) {
 }
 
 describe('DiagramCanvas ↔ DiagramStore 포인터 편집 [SPEC-2.1]', () => {
-  it('노드를 드래그하면 스냅을 거친 좌표가 코드에 반영되고 Undo 한 번으로 돌아간다 [SPEC-3.2][SPEC-5.3]', () => {
+  it('[IT-02] 노드를 드래그하면 스냅을 거친 좌표가 코드에 반영되고 Undo 한 번으로 돌아간다 [SPEC-3.2][SPEC-5.3]', () => {
     const snap = vi.fn((point: BendPoint) => ({ x: point.x - 5, y: point.y }));
     const { store, box, drag, releases } = setup(classSource(), { snap });
     drag(box('class:B'), [400, 100], [430, 140]);

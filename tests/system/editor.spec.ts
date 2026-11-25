@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('[TC-CODE-1.1-01] 편집, GUI 색상, Undo, 공식 SVG 미리보기', {
+test('[ST-07] 편집, GUI 색상, Undo, 공식 SVG 미리보기', {
   tag: ['@SPEC-1.1', '@SPEC-1.3', '@SPEC-4.1', '@SPEC-5.3'],
 }, async ({ page }) => {
   await page.goto('/');
@@ -21,7 +21,7 @@ test('[TC-CODE-1.1-01] 편집, GUI 색상, Undo, 공식 SVG 미리보기', {
   await expect(page.getByRole('img', { name: 'Mermaid 자동 배치 결과' })).toBeVisible();
 });
 
-test('[TC-CODE-1.3-01] Mermaid adapter updates the team canvas and reports unsupported syntax with its source line', {
+test('[ST-09] Mermaid adapter updates the team canvas and reports unsupported syntax with its source line', {
   tag: ['@SPEC-1.3', '@SPEC-1.2'],
 }, async ({ page }) => {
   await page.goto('/');
@@ -40,7 +40,7 @@ test('[TC-CODE-1.3-01] Mermaid adapter updates the team canvas and reports unsup
   await expect(page.getByText('응답', { exact: true })).toBeVisible();
 });
 
-test('[TC-CODE-1.3-02] shows critical options in the team canvas and retains their syntax in the official preview', {
+test('[ST-10] shows critical options in the team canvas and retains their syntax in the official preview', {
   tag: ['@SPEC-1.3'],
 }, async ({ page }) => {
   await page.goto('/');
@@ -61,7 +61,7 @@ test('[TC-CODE-1.3-02] shows critical options in the team canvas and retains the
   await expect.poll(svgSource).toContain('취소');
 });
 
-test('[TC-CODE-1.2-01] reports an inactive participant at its original line and keeps the previous canvas', {
+test('[ST-08] reports an inactive participant at its original line and keeps the previous canvas', {
   tag: ['@SPEC-1.2'],
 }, async ({ page }) => {
   await page.goto('/');
