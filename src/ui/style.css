@@ -17,7 +17,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .code-panel textarea { width: 100%; min-height: 600px; flex: 1; resize: vertical; border: 0; outline: none; padding: 15px; font: 14px/1.6 Consolas, monospace; color: #253148; }
 .feedback { padding: 12px 14px; background: #eff7f2; border-top: 1px solid #d6e9da; font-size: 12px; color: #2c6040; }
 .feedback.error { background: #fff0f0; border-color: #f1caca; color: #a32929; }
-.diagram-svg { width: 100%; min-height: 550px; flex: 1; touch-action: none; }
+.diagram-svg { width: 100%; min-height: 550px; flex: 1; touch-action: none; overflow: hidden; cursor: grab; }
+.diagram-svg.is-panning, .diagram-svg.is-panning * { cursor: grabbing; }
+.canvas-zoom { min-width: 48px; align-self: center; text-align: center; font-variant-numeric: tabular-nums; }
 .canvas-node { cursor: grab; }
 .canvas-node:active { cursor: grabbing; }
 .canvas-node.disabled { cursor: not-allowed; }

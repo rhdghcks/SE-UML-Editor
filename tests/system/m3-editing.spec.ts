@@ -12,8 +12,8 @@ async function open(page: Page, code = 'classDiagram\nA --> B', nodes = boxes) {
   await expect(page.locator('.feedback.error')).toHaveCount(0);
 }
 async function screen(page: Page, x: number, y: number) {
-  return page.locator('svg.diagram-svg').evaluate((svg: SVGSVGElement, point) => {
-    const matrix = svg.getScreenCTM();
+  return page.locator('.canvas-world').evaluate((world: SVGGElement, point) => {
+    const matrix = world.getScreenCTM();
     if (!matrix) throw new Error('SVG transform is missing');
     const result = new DOMPoint(point.x, point.y).matrixTransform(matrix);
     return { x: result.x, y: result.y };
@@ -76,9 +76,20 @@ test('[TC-CANVAS-2.4-01] resize, fit all text, undo and file reload preserve nod
 test('[TC-CANVAS-2.3-01] edge dragging, bend editing, reset and undo work without moving endpoints', {
   tag: ['@SPEC-2.3', '@SPEC-2.2', '@SPEC-5.3'],
 }, async ({ page }) => {
-  await open(page);
-  await drag(page, { x: 300, y: 126 }, { x: 300, y: 206 });
+  await open(page, 'classDiagram\nA --> B : relation');
   const editor = page.getByRole('textbox', { name: 'Mermaid 코드' });
+  const original = await editor.inputValue();
+  await expect(page.getByRole('button', { name: '꺾임점 추가', exact: true })).toHaveCount(0);
+  await page.locator('.canvas-edge text').dblclick();
+  await drag(page, { x: 300, y: 126 }, { x: 300, y: 206 });
+  await expect(editor).toHaveValue(original);
+  await expect(page.locator('.bend-handle')).toHaveCount(0);
+  for (const x of [280, 320]) {
+    const point = await screen(page, x, 126);
+    await page.mouse.dblclick(point.x, point.y);
+  }
+  await expect(page.locator('.bend-handle')).toHaveCount(2);
+  await drag(page, { x: 300, y: 126 }, { x: 300, y: 206 });
   await expect(editor).toHaveValue(/@se-uml-route/);
   await expect(page.locator('.bend-handle')).toHaveCount(2);
   await expect(node(page, 'class:A')).toHaveAttribute('x', '60');
@@ -88,7 +99,8 @@ test('[TC-CANVAS-2.3-01] edge dragging, bend editing, reset and undo work withou
   await expect.poll(async () => Number(await handle.getAttribute('cy'))).toBeCloseTo(y + 25, 2);
   await page.getByRole('button', { name: '꺾임점 삭제' }).click();
   await expect(page.locator('.bend-handle')).toHaveCount(1);
-  await page.getByRole('button', { name: '꺾임점 추가' }).click();
+  const add = await screen(page, 287, 190);
+  await page.mouse.dblclick(add.x, add.y);
   await expect(page.locator('.bend-handle')).toHaveCount(2);
   await page.getByRole('button', { name: '경로 초기화' }).click();
   await expect(page.locator('.bend-handle')).toHaveCount(0);
@@ -128,8 +140,10 @@ test('[TC-CANVAS-2.3-02] critical sequence messages retain edited bends after co
   const edge = page.locator('.edge-line').first();
   const points = (await edge.getAttribute('points'))!.split(' ').map(point => point.split(',').map(Number));
   const x = (points[0][0] + points[1][0]) / 2, y = points[0][1];
-  await drag(page, { x, y }, { x, y: y + 20 });
-  await expect(page.locator('.bend-handle')).toHaveCount(2);
+  const bend = await screen(page, x, y);
+  await page.mouse.dblclick(bend.x, bend.y);
+  await drag(page, { x: x - 20, y }, { x: x - 20, y: y + 20 });
+  await expect(page.locator('.bend-handle')).toHaveCount(1);
   const route = await edge.getAttribute('points');
   await editor.fill((await editor.inputValue()).replace('critical main', 'critical edited'));
   await expect(edge).toHaveAttribute('points', route!);
