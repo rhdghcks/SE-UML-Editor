@@ -4,9 +4,12 @@
 //canvas 노드 이동이 가능한 창
 
 
+//구현 필요 기능
+//findClass : 클릭한 그림이 어떤 객체인지 판별
+
 import { useState, useEffect, useRef } from 'react';
 import type { EditorSnapshot } from '../../../core/types';
-import { ClassDiagram } from './old_ClassDiagram';
+import { Canvas } from './Canvas';
 
 interface Props {
   snapshot: EditorSnapshot;
@@ -29,7 +32,9 @@ export function Canvas_UI({ snapshot, disabled, onMove, onChangeColor }: Props) 
   const [selected, setSelected] = useState<string | null>(null);
   const currentNode = selected ? snapshot.layout[selected] : undefined;
 
+  //현재 모델 종류
   const modelKind = snapshot.model.kind;
+  //직전 모델 종류 저장
   const previousKind = useRef(snapshot.model.kind);
 
   //아래 작업시 노드 선택 해제
@@ -50,56 +55,136 @@ export function Canvas_UI({ snapshot, disabled, onMove, onChangeColor }: Props) 
   const isNodeSelected = Boolean(selected && currentNode);
 
   /////
+  //그림판용 객체
   const svg = useRef<SVGSVGElement>(null);
-  const canvas = svg.current;
+  //그림판 그림 영역 객체
+  const drawingLayer = useRef<SVGGElement>(null);
 
+  //그림판 도구 함수 모음 객체
+  const canvasRef = useRef<Canvas | null>(null);
+
+  //svg 내의 g 객체가 생성되었을 때 Canvas 생성, g를 캔버스 객체의 그림판으로 설정
+  useEffect(() => {
+    if (!drawingLayer.current) return;
+    canvasRef.current = new Canvas(drawingLayer.current);
+    return () => {
+      canvasRef.current = null;
+    };
+  }, []);
+
+  //좌표계, 줌 기능
   const [centerX, setCenterX] = useState(0);
   const [centerY, setCenterY] = useState(0);
+
   const [zoomLevel, setZoomLevel] = useState(0);
   const zoomScale = 1.1;
   const baseSize = 200;
-  const canvasSize = baseSize / (zoomScale ** zoomLevel);
+  const canvasSize = Math.round(baseSize / (zoomScale ** zoomLevel));
 
-  //받은 좌표를 중심점 좌표계로 변환해 리턴
-  function toCenterRect(
-    x: number,
-    y: number,
-    w: number,
-    h: number) {
-    return {
-      x: x - w / 2,
-      y: y - h / 2,
-      w,
-      h
+
+  // 드래그 시작 위치(html 상대 좌표)
+  const dragStart = useRef({
+    x: 0,
+    y: 0,
+    centerX: 0,
+    centerY: 0
+  });
+
+  // 현재 드래그중인지 기록
+  const [isDragging, setIsDragging] = useState(false);
+  // 드래그 시작
+  function handlePointerDown(event: React.PointerEvent<SVGSVGElement>) {
+    // SVG 바탕을 누른 경우에만 허용
+    if (event.target !== event.currentTarget) return;
+
+    setIsDragging(true);
+
+    dragStart.current = {
+      x: event.clientX,
+      y: event.clientY,
+      centerX,
+      centerY
     };
+
+    event.currentTarget.setPointerCapture(event.pointerId);
   }
 
-  function zoom(event: React.WheelEvent<SVGSVGElement>) {
-    event.preventDefault();
+  // 드래그 중
+  function handlePointerMove(event: React.PointerEvent<SVGSVGElement>) {
+    if (!isDragging) return;
 
-    setZoomLevel(level =>
-      level + (event.deltaY < 0 ? 1 : -1)
-    );
+    const element = svg.current;
+    if (!element) return;
+    const rect = element.getBoundingClientRect();
+
+    // 실제 화면 크기 대비 SVG 좌표 비율
+    const scale = canvasSize / Math.min(rect.width, rect.height);
+
+    // 마우스 이동량을 SVG 좌표로 변환
+    const dx = (event.clientX - dragStart.current.x) * scale;
+    const dy = (event.clientY - dragStart.current.y) * scale;
+
+    setCenterX(dragStart.current.centerX - dx);
+    setCenterY(dragStart.current.centerY - dy);
   }
 
-  function drawRect(
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    props = {}) {
-    const pos = toCenterRect(x, y, w, h);
+  // 드래그 종료
+  function handlePointerUp(event: React.PointerEvent<SVGSVGElement>) {
+    setIsDragging(false);
 
-    return (
-      <rect
-        {...props}
-        x={pos.x}
-        y={pos.y}
-        width={pos.w}
-        height={pos.h}
-      />
-    )
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   }
+
+  //줌 휠 기능을 이벤트로 등록
+  useEffect(() => {
+    const canvas = svg.current;
+    if (!canvas) return;
+
+    function handleWheel(event: WheelEvent) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      setZoomLevel(level =>
+        level + (event.deltaY < 0 ? 1 : -1)
+      );
+    }
+
+    canvas.addEventListener('wheel', handleWheel, {
+      passive: false
+    });
+
+    return () => {
+      canvas.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
+
+
+  //다이어그램 유형에 따라 서로 다른 하위 객체에게 그림 생성 위임
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    canvas.clear();
+
+    if (modelKind === 'class') {
+      canvas.drawRect(0, 0, 10, 20, {
+        fill: '#FF0000'
+      });
+    } else if (modelKind === 'sequence') {
+      canvas.drawRect(0, 10, 20, 10, {
+        fill: '#00FF00'
+      });
+    } else {
+      // 알 수 없는 다이어그램
+    }
+
+    canvas.drawLine(-100, -100, 100, 100);
+    canvas.drawLine(100, -100, -100, 100);
+
+  }, [snapshot, modelKind]);
+
 
   return (
     <section className="canvas-UI">
@@ -122,42 +207,20 @@ export function Canvas_UI({ snapshot, disabled, onMove, onChangeColor }: Props) 
           )}
         </div>
 
-        <span>pos : {centerX} {centerY}</span>
+        <span>pos : {Math.round(centerX)} {Math.round(centerY)}</span>
         <span>size : {canvasSize}</span>
+
       </div>
 
       {/* 캔버스 */}
       <svg className="canvas" ref={svg}
         viewBox={`${centerX - canvasSize / 2} ${centerY - canvasSize / 2} ${canvasSize} ${canvasSize}`}
-        onWheel={zoom}
-      >
-        {/* 내부 도형 그리기는 별도 클래스로 관리 */}
-        <g>
-
-          {drawRect(0, 0, 200, 100, {
-            fill: "#FF0000",
-          })}
-
-          <line
-            x1="0" y1="0"
-            x2="150" y2="100"
-            stroke="#000000"
-            strokeWidth="2" />
-        </g>
-
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      ><g ref={drawingLayer} />
       </svg>
-
-      {/*}
-      <div className="canvas">
-        {modelKind === 'class' ? (
-          <ClassDiagram document={snapshot} disabled={disabled} selected={selected} onSelect={setSelected} onMove={onMove} />
-        ) : modelKind === 'sequence' ? (
-          <div>(IMSI)SEQUENCE</div>
-        ) : (
-          <div>(IMSI)UNKNOWN</div>
-        )}
-      </div>
-*/}
 
     </section >
   );

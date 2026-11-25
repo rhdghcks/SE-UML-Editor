@@ -47,9 +47,9 @@
 
 
 .canvas {
-  display: flex;
+  display: block;
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
 
   /* 경계 확인용 임시 테두리 */
   /*border: 1px solid #008F00;*/
