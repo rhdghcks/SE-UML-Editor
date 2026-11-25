@@ -4,8 +4,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useState, useSyncExternalStore } from 'react';
 import { DiagramCanvas } from '../../../src/ui/DiagramCanvas';
 import { DiagramStore } from '../../../src/core/diagram-store';
-import { writeRoute } from '../../../src/core/route-editing';
-import { readRoutes } from '../../../src/core/manual-routes';
+import { writeRoute, writeSequenceOffset } from '../../../src/core/route-editing';
+import { readRoutes, readSequenceOffsets } from '../../../src/core/manual-routes';
 import { BasicMermaidParser } from '../../../src/adapters/basic-mermaid-parser';
 import { GridLayout } from '../../../src/adapters/grid-layout';
 import type { BendPoint } from '../../../src/core/manual-routes';
@@ -46,9 +46,11 @@ function setup(source = classSource(), options: Options = {}) {
     const [selected, setSelected] = useState<string | null>(null);
     return <DiagramCanvas document={document} disabled={options.disabled ?? false}
       selected={selected} onSelect={setSelected} onMove={store.moveNode} onResize={store.resizeNode}
-      onRouteChange={(key, points) => {
+      onRouteChange={(key, points, offsetY) => {
         if (options.failRoute) throw new Error('간선을 바꿀 수 없습니다.');
-        store.updateSource(writeRoute(store.getSnapshot().source, key, points));
+        let source = writeRoute(store.getSnapshot().source, key, points);
+        if (offsetY !== undefined) source = writeSequenceOffset(source, key, offsetY);
+        store.updateSource(source);
       }}
       onError={message => { if (message) errors.push(message); }}
       onInteractionStart={() => { releases.begun++; return () => { releases.released++; }; }}
@@ -184,6 +186,72 @@ describe('DiagramCanvas 간선 편집 [SPEC-2.3]', () => {
   });
 });
 
+describe('시퀀스 화살표 수직 드래그 [SPEC-2.2]', () => {
+  const code = 'sequenceDiagram\nUser->>Server: call\nactivate Server\nServer-->>User: reply\ndeactivate Server';
+  const source = code + '\n%% @se-uml-layout ' + JSON.stringify({ version: 1, nodes: {
+    'participant:User': { ...BOXES['class:A'], height: 70 },
+    'participant:Server': { ...BOXES['class:B'], height: 70 },
+  } });
+  it('직선 전체와 메시지 문구를 수직 이동하되 점을 만들지 않고 한 단계 Undo로 복구한다 [SPEC-5.3][SPEC-1.3]', () => {
+    const { store, view, svg, at, drag } = setup(source);
+    const edge = edgeOf(view.container);
+    const layout = store.getSnapshot().layout;
+    drag(edge, [300, 200], [340, 300]);
+    expect(edge).toHaveAttribute('points', '155,300 445,300');
+    expect(view.container.querySelectorAll('.bend-handle')).toHaveLength(0);
+    expect(view.container.querySelector('.canvas-edge text')).toHaveAttribute('y', '290');
+    expect(screen.getByText('activate: Server')).toHaveAttribute('y', '324');
+    expect([...readSequenceOffsets(store.getSnapshot().source).values()]).toEqual([100]);
+    expect(store.getSnapshot().layout).toEqual(layout);
+    expect(store.getSnapshot().source.split('\n%%')[0]).toBe(code);
+    const moved = store.getSnapshot();
+    drag(edge, [300, 300], [380, 300]);
+    expect(store.getSnapshot()).toBe(moved);
+    act(() => store.undo());
+    expect(edge).toHaveAttribute('points', '155,200 445,200');
+    act(() => store.redo());
+    expect(edge).toHaveAttribute('points', '155,300 445,300');
+    fireEvent.pointerDown(edge, at(300, 300));
+    fireEvent.pointerMove(svg, at(300, 350));
+    expect(edge).toHaveAttribute('points', '155,350 445,350');
+    fireEvent.keyDown(svg, { key: 'Escape' });
+    fireEvent.pointerUp(svg, at(300, 350));
+    expect(store.getSnapshot().source).toBe(moved.source);
+    expect(edge).toHaveAttribute('points', '155,300 445,300');
+  });
+
+  it('꺾인 선도 같은 모양으로 이동하고 경로 초기화와 Undo가 높이·점을 함께 복구한다 [SPEC-2.3][SPEC-5.3]', () => {
+    const { store, view, drag, at, svg } = setup(source);
+    const edge = edgeOf(view.container);
+    drag(edge, [300, 200], [300, 200]);
+    fireEvent.doubleClick(edge, at(300, 200));
+    const handle = view.container.querySelector('.bend-handle')!;
+    drag(handle, [300, 200], [300, 225]);
+    drag(edge, [227.5, 212.5], [307.5, 272.5]);
+    expect(edge).toHaveAttribute('points', '155,260 300,285 445,260');
+    expect(view.container.querySelectorAll('.bend-handle')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: '경로 초기화' }));
+    expect(edge).toHaveAttribute('points', '155,200 445,200');
+    act(() => store.undo());
+    expect(edge).toHaveAttribute('points', '155,260 300,285 445,260');
+    // Another pointer and pointercancel never commit the temporary move.
+    const before = store.getSnapshot();
+    fireEvent.pointerDown(edge, at(227.5, 272.5));
+    fireEvent.pointerMove(svg, at(227.5, 300, { pointerId: 2 }));
+    fireEvent.pointerCancel(svg, at(227.5, 300));
+    expect(store.getSnapshot()).toBe(before);
+  });
+
+  it('박스·앞 행을 넘지 않도록 제한하며 이동이 거부되면 오류를 알리고 원문을 유지한다 [SPEC-1.2]', () => {
+    const { store, view, drag, errors } = setup(source, { failRoute: true });
+    const before = store.getSnapshot();
+    drag(edgeOf(view.container), [300, 200], [300, -500]);
+    expect(errors).toEqual(['간선을 바꿀 수 없습니다.']);
+    expect(store.getSnapshot()).toBe(before);
+    expect(edgeOf(view.container)).toHaveAttribute('points', '155,200 445,200');
+  });
+});
+
 describe('DiagramCanvas 상태 전이 [SPEC-1.2]', () => {
   it('비활성화되면 조작을 받지 않고 마지막 정상 문서를 계속 그린다', () => {
     const { store, box, drag, releases, view } = setup(classSource(), { disabled: true });
@@ -226,20 +294,20 @@ describe('DiagramCanvas 상태 전이 [SPEC-1.2]', () => {
     } });
     const { store, svg, box, at, drag } = setup(source);
     const label = screen.getByText('activate: Server');
-    expect(label).toHaveAttribute('x', '433');
+    expect(label).toHaveAttribute('x', '139');
     expect(label).toHaveAttribute('text-anchor', 'end');
     fireEvent.pointerDown(box('participant:User'), at(100, 100));
     fireEvent.pointerMove(svg, at(650, 100));
-    expect(label).toHaveAttribute('x', '457');
-    expect(screen.getByText('else: expired')).toHaveAttribute('x', '362');
+    expect(label).toHaveAttribute('x', '429');
+    expect(screen.getByText('else: expired')).toHaveAttribute('x', '429');
     fireEvent.pointerCancel(svg, at(650, 100));
-    expect(label).toHaveAttribute('x', '433');
+    expect(label).toHaveAttribute('x', '139');
     expect(store.getSnapshot().source).toBe(source);
     drag(box('participant:User'), [100, 100], [650, 100]);
     act(() => store.resizeNode('participant:Server', 230, 100));
-    expect(label).toHaveAttribute('x', '477');
-    expect(screen.getByText('deactivate: Server')).toHaveAttribute('x', '477');
-    expect(screen.getByText('alt: valid')).toHaveAttribute('x', '362');
+    expect(label).toHaveAttribute('x', '449');
+    expect(screen.getByText('deactivate: Server')).toHaveAttribute('x', '449');
+    expect(screen.getByText('alt: valid')).toHaveAttribute('x', '449');
     expect(store.getSnapshot().source.split('\n%%')[0]).toBe(code);
   });
 });

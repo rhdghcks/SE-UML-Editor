@@ -2,8 +2,9 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, PointerEvent } from 'react';
 import type { DiagramDocument, NodeLayout } from '../core/types';
 import type { BendPoint } from '../core/manual-routes';
-import { canvasEdges, firstSequenceRow, nearestPoint, sequenceLabelPosition, sequenceRows } from '../core/diagram-geometry';
+import { canvasEdges, firstSequenceRow, nearestPoint, sequenceLabelPosition, sequenceRowPositions, sequenceRows } from '../core/diagram-geometry';
 import type { CanvasEdge } from '../core/diagram-geometry';
+import { writeRoute, writeSequenceOffset } from '../core/route-editing';
 import { MAX_ZOOM, MIN_ZOOM, fitViewport, panViewport, zoomViewport } from './canvas-viewport';
 import type { CanvasViewport } from './canvas-viewport';
 
@@ -14,14 +15,14 @@ interface Props {
   onSelect(id: string): void;
   onMove(id: string, x: number, y: number): void;
   onResize(id: string, width: number, height: number): void;
-  onRouteChange(key: string, points: BendPoint[]): void;
+  onRouteChange(key: string, points: BendPoint[], offsetY?: number): void;
   onError(message: string): void;
   onInteractionStart(): () => void;
   snapNode(point: BendPoint, id: string): BendPoint;
 }
 
 type Preview = { kind: 'node'; id: string; box: NodeLayout } |
-  { kind: 'route'; key: string; points: BendPoint[] };
+  { kind: 'route'; key: string; points: BendPoint[]; offsetY?: number };
 interface Gesture {
   kind: 'node' | 'resize' | 'edge' | 'bend';
   pointerId: number;
@@ -60,18 +61,33 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
   const shown = disabled ? validDocument.current : document;
   const { model, layout } = shown;
   const displayLayout = preview?.kind === 'node' ? { ...layout, [preview.id]: preview.box } : layout;
-  const edges = canvasEdges({ ...shown, layout: displayLayout }).map(edge =>
-    preview?.kind === 'route' && preview.key === edge.key
-      ? { ...edge, points: [edge.points[0], ...preview.points, edge.points.at(-1)!] } : edge);
+  let displaySource = preview?.kind === 'route' ? writeRoute(shown.source, preview.key, preview.points) : shown.source;
+  if (preview?.kind === 'route' && preview.offsetY !== undefined) {
+    displaySource = writeSequenceOffset(displaySource, preview.key, preview.offsetY);
+  }
+  const displayDocument = { ...shown, layout: displayLayout, source: displaySource };
+  const edges = canvasEdges(displayDocument);
   const activeEdge = edges.find(edge => edge.key === selectedEdge);
   const nodes = model.kind === 'class' ? model.nodes : model.participants;
   const rows = model.kind === 'sequence' ? sequenceRows(model.steps) : [];
+  const rowPositions = sequenceRowPositions(displayDocument);
+  // Reserve space to the left without changing any persisted participant/message coordinates.
+  // Use conservative Arial 16px character widths; the SVG export uses the same gutter.
+  const leftGutter = Math.max(0, ...rows.flatMap((row, index) => {
+    const label = sequenceLabelPosition(row, index, layout);
+    if (!label) return [];
+    const textWidth = row.text.split('').reduce((width, char) => width +
+      (/[ilI.,:;!'| ]/.test(char) ? 6 : /[ftr()\[\]]/.test(char) ? 8 :
+        /[WMm@%]/.test(char) ? 17 : /[A-Zw]/.test(char) ? 14 : char.charCodeAt(0) > 127 ? 20 : 11), 0);
+    return [textWidth + 16 - label.x];
+  }));
   // A fixed viewBox during a gesture prevents the coordinate system moving under the pointer.
   const savedEdges = canvasEdges(shown);
   const points = savedEdges.flatMap(edge => edge.points);
-  const width = Math.max(900, ...Object.values(layout).map(box => box.x + box.width + 60), ...points.map(p => p.x + 32));
+  const width = Math.max(900, ...Object.values(layout).map(box => box.x + box.width + 60), ...points.map(p => p.x + 32)) + leftGutter;
   const height = Math.max(480, ...Object.values(layout).map(box => box.y + box.height + 100),
-    ...points.map(p => p.y + 40), model.kind === 'sequence' ? firstSequenceRow(layout) + rows.length * 65 : 0);
+    ...points.map(p => p.y + 40), model.kind === 'sequence'
+      ? (sequenceRowPositions(shown).at(-1) ?? firstSequenceRow(layout)) + 65 : 0);
 
   function releaseLayout() {
     const release = releaseInteraction.current;
@@ -89,7 +105,7 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
     let bounds: DOMRect;
     try { bounds = element.getBBox(); }
     finally { if (transform !== null) element.setAttribute('transform', transform); }
-    setView(fitViewport(bounds, { width, height }));
+    setView(fitViewport({ x: bounds.x + leftGutter, y: bounds.y, width: bounds.width, height: bounds.height }, { width, height }));
   }, [fitRequest]);
   function cancel() {
     if (pan.current) setView(pan.current.view);
@@ -158,8 +174,8 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
     if (!start) return;
     event.stopPropagation(); event.preventDefault();
     svg.current?.focus({ preventScroll: true });
-    // A straight line can be selected, but only a line double-click may create bends.
-    if (data.kind === 'edge' && data.edge?.points.length === 2) {
+    // Sequence arrows move vertically without creating bends. Straight class edges are selection-only.
+    if (data.kind === 'edge' && !data.edge?.sequence && data.edge?.points.length === 2) {
       setSelectedEdge(data.id); setSelectedBend(null); return;
     }
     // Keep click/double-click targeted at the line, rather than retargeting them to its group.
@@ -185,6 +201,12 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
     }
     const edge = current.edge!;
     let bends = edge.points.slice(1, -1).map(p => ({ ...p }));
+    if (current.kind === 'edge' && edge.sequence) {
+      const delta = Math.max(Math.round(edge.points[0].y + dy) - edge.points[0].y, edge.sequence.minY - edge.points[0].y,
+        bends.length ? -Math.min(...bends.map(point => point.y)) : -Infinity);
+      return { kind: 'route', key: edge.key, points: bends.map(p => ({ x: p.x, y: p.y + delta })),
+        offsetY: delta === 0 ? undefined : edge.sequence.offsetY + delta };
+    }
     if (current.kind === 'bend' && current.bend !== undefined) {
       bends[current.bend] = { x: Math.max(0, bends[current.bend].x + dx), y: Math.max(0, bends[current.bend].y + dy) };
     } else {
@@ -207,7 +229,8 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
     safely(() => {
       const point = svgPoint(event.clientX, event.clientY);
       if (!point) return;
-      current.moved ||= Math.hypot(point.x - current.start.x, point.y - current.start.y) > 0.5;
+      current.moved ||= (current.kind === 'edge' && current.edge?.sequence
+        ? Math.abs(point.y - current.start.y) : Math.hypot(point.x - current.start.x, point.y - current.start.y)) > 0.5;
       if (current.moved) setPreview(calculate(current, point));
     });
   }
@@ -224,9 +247,13 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
       if (disabled || current.document !== document) return;
       safely(() => {
         const point = svgPoint(event.clientX, event.clientY);
-        if (!point || (!current.moved && Math.hypot(point.x - current.start.x, point.y - current.start.y) <= 0.5)) return;
+        if (!point || (!current.moved && (current.kind === 'edge' && current.edge?.sequence
+          ? Math.abs(point.y - current.start.y) : Math.hypot(point.x - current.start.x, point.y - current.start.y)) <= 0.5)) return;
         const result = calculate(current, point);
-        if (result.kind === 'route') onRouteChange(result.key, result.points);
+        if (result.kind === 'route') {
+          if (result.offsetY === undefined && JSON.stringify(result.points) === JSON.stringify(current.edge?.points.slice(1, -1))) return;
+          onRouteChange(result.key, result.points, result.offsetY);
+        }
         else if (current.kind === 'resize') onResize(result.id, result.box.width, result.box.height);
         else if (result.box.x !== current.box?.x || result.box.y !== current.box?.y) onMove(result.id, result.box.x, result.box.y);
       });
@@ -260,15 +287,17 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
   }
   return <div className="canvas-editor">
     <div className="canvas-tools">
-      <span>휠: 확대·축소 · 빈 공간 드래그: 화면 이동 · 선 더블클릭: 꺾임점 추가 · Esc: 취소</span>
+      <span>휠: 확대·축소 · 빈 공간 드래그: 화면 이동 · 시퀀스 선 드래그: 위아래 이동 · 선 더블클릭: 꺾임점 추가 · Esc: 취소</span>
       <button aria-label="캔버스 축소" disabled={viewport.scale <= MIN_ZOOM} onClick={() => zoom(1 / 1.2)}>−</button>
       <output className="canvas-zoom" aria-label="캔버스 배율">{Math.round(viewport.scale * 100)}%</output>
       <button aria-label="캔버스 확대" disabled={viewport.scale >= MAX_ZOOM} onClick={() => zoom(1.2)}>+</button>
       <button onClick={() => { cancel(); requestFit(value => value + 1); }}>보기 초기화</button>
       <button disabled={disabled || !selected || Boolean(selectedEdge)} onClick={fitText}>텍스트에 맞추기</button>
       <button disabled={disabled || !activeEdge || selectedBend === null} onClick={deleteBend}>꺾임점 삭제</button>
-      <button disabled={disabled || !activeEdge || activeEdge.points.length === 2}
-        onClick={() => activeEdge && safely(() => { onRouteChange(activeEdge.key, []); setSelectedBend(null); })}>경로 초기화</button>
+      <button disabled={disabled || !activeEdge || (activeEdge.points.length === 2 && !activeEdge.sequence?.storedOffsetY)}
+        onClick={() => activeEdge && safely(() => {
+          onRouteChange(activeEdge.key, [], activeEdge.sequence ? 0 : undefined); setSelectedBend(null);
+        })}>경로 초기화</button>
     </div>
     <svg ref={svg} className={panning ? 'diagram-svg is-panning' : 'diagram-svg'} tabIndex={0} aria-label="다이어그램 편집 캔버스"
       viewBox={`0 0 ${width} ${height}`} onPointerDown={beginPan} onPointerMove={move} onPointerUp={finish}
@@ -281,7 +310,7 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
       <defs><marker id={`${canvasId}-arrow`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
         <path d="M 0 0 L 10 5 L 0 10 z" fill="#596579" /></marker></defs>
       <rect className="canvas-background" width={width} height={height} fill="white" />
-      <g ref={world} className="canvas-world" transform={`translate(${viewport.x} ${viewport.y}) scale(${viewport.scale})`}>
+      <g ref={world} className="canvas-world" transform={`translate(${viewport.x + leftGutter * viewport.scale} ${viewport.y}) scale(${viewport.scale})`}>
       {edges.map(edge => {
         const middle = edge.points[Math.floor(edge.points.length / 2)];
         const label = edge.points.length === 2 ? { x: (edge.points[0].x + edge.points[1].x) / 2, y: (edge.points[0].y + edge.points[1].y) / 2 } : middle;
@@ -310,7 +339,7 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
           x2={box.x + box.width / 2} y2={height - 35} stroke="#9da7b6" strokeDasharray="6 5" pointerEvents="none" />;
       })}
       {model.kind === 'sequence' && rows.map((row, index) => {
-        const label = sequenceLabelPosition(row, index, displayLayout);
+        const label = sequenceLabelPosition(row, index, displayLayout, rowPositions[index]);
         return label && <text key={row.id} className="sequence-annotation" data-sequence-row-id={row.id}
           data-target-id={row.target} x={label.x} y={label.y} textAnchor={label.textAnchor}
           fontSize="16" pointerEvents="none">{row.text}</text>;

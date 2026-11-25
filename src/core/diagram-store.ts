@@ -1,7 +1,7 @@
 import { mergeRoutes } from './manual-routes';
 import { sequenceRouteKeys } from './diagram-geometry';
-import { readRoutes } from './manual-routes';
-import { writeRoute } from './route-editing';
+import { readRoutes, readSequenceOffsets } from './manual-routes';
+import { writeRoute, writeSequenceOffset } from './route-editing';
 import type { IDiagramEditor, ILayoutEngine, IParser, ISnapStrategy } from './contracts';
 import { readLayoutMetadata, writeLayoutMetadata } from './layout-metadata';
 import type { ClassDiagram, EditorSnapshot, LayoutMap, NodeLayout } from './types';
@@ -33,8 +33,13 @@ export class DiagramStore implements IDiagramEditor {
       const incoming = readRoutes(source);
       if ((origin === 'code' || origin === 'gui') && this.valid.model.kind === 'sequence') {
         const prior = readRoutes(this.valid.source);
+        const offsets = readSequenceOffsets(this.valid.source);
         for (const key of sequenceRouteKeys(model.steps)) {
-          if (!incoming.has(key) && prior.has(key)) source = writeRoute(source, key, prior.get(key)!);
+          if (!incoming.has(key) && prior.has(key)) {
+            source = writeRoute(source, key, prior.get(key)!);
+            const offset = offsets.get(key);
+            if (offset !== undefined) source = writeSequenceOffset(source, key, offset);
+          }
         }
       }
     }

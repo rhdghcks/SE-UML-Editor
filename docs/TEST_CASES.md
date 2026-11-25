@@ -37,7 +37,10 @@
 | TC-CANVAS-2.5-04 | 시스템 | 추가 요청 | 2.5 | P2 | 오류 추측 | 긴 관계 라벨을 가진 클래스 A → B | 확대·화면 이동 → 보기 초기화 → 초기화 반복 | 노드와 긴 라벨이 모두 캔버스 안에 여백을 두고 보이며 가운데 정렬된다. 원문은 그대로이고 반복 초기화 결과가 같다. | [m3-viewport.spec.ts](../tests/system/m3-viewport.spec.ts) |
 | TC-CANVAS-2.5-05 | 시스템 | 추가 요청 | 2.5 | P2 | 오류 추측 | 긴 critical 제목과 option을 가진 시퀀스 | 확대·화면 이동 → 보기 초기화 → 초기화 반복 | 참여자·메시지·생명선·긴 블록 제목이 모두 캔버스 안에 보인다. 원문은 그대로이고 반복 초기화 결과가 같다. | [m3-viewport.spec.ts](../tests/system/m3-viewport.spec.ts) |
 
-| TC-CANVAS-2.1-04 | 시스템 | FR-2, FR-3, FR-13 | 2.1, 1.3, 5.3, 5.2 | P1 | 상태 전이, 왕복 | User(60,70)·Server(350,70)와 activate/deactivate·alt/else가 있는 시퀀스 | User를 Server 오른쪽으로 이동 → 확대 상태에서 Server 이동 → Undo/Redo → 저장 후 다른 예제로 전환 → 재열기 | 활성화 설명은 Server 생명선 옆(433→457→557)에 붙고 좌우 순서에 따라 정렬 방향이 바뀐다. 분기 설명은 참조 참여자의 왼쪽 위치를 따르며, Undo/Redo·재열기로 같은 위치가 복원된다. | [m3-sequence-annotations.spec.ts](../tests/system/m3-sequence-annotations.spec.ts) |
+| TC-CANVAS-2.1-04 | 시스템 | FR-2, FR-3, FR-13 | 2.1, 1.3, 5.3, 5.2 | P1 | 상태 전이, 왕복 | User(60,70)·Server(350,70)와 activate/deactivate·alt/else가 있는 시퀀스 | User를 Server 오른쪽으로 이동 → 확대 상태에서 Server 이동 → Undo/Redo → 저장 후 다른 예제로 전환 → 재열기 | activate/deactivate·alt/else 모두 오른쪽 끝을 같은 위치(139→429→529)에 맞춰 가장 왼쪽 생명선 바깥에 표시된다. 가장 왼쪽 참여자가 바뀌어도 같은 열을 유지하며 Undo/Redo·재열기로 위치가 복원된다. | [m3-sequence-annotations.spec.ts](../tests/system/m3-sequence-annotations.spec.ts) |
+
+| TC-CANVAS-2.2-01 | 시스템 | FR-9, FR-3, FR-8, FR-13 | 2.2, 1.3, 5.3, 5.2, 3.1 | P1 | 상태 전이, 왕복 | User·Server와 활성화·분기가 있는 시퀀스 | 첫 선을 100 아래로 드래그 → Undo/Redo → 코드 재편집 → User를 Server 오른쪽으로 이동 → 저장·재열기 | 첫 화살표는 y=300, 꺾임점 0개, 양 끝은 생명선 위다. activate 설명은 y=324, 후속 메시지는 y=348이다. 코드·저장 복원 후에도 같은 위치와 설명 연결을 유지한다. | [m3-sequence-drag.spec.ts](../tests/system/m3-sequence-drag.spec.ts) |
+| TC-CANVAS-2.2-02 | 시스템 | FR-9, FR-10, FR-8 | 2.2, 2.3, 2.5, 5.3 | P1 | 상태 전이 | 시퀀스 예제를 확대·화면 이동한 상태 | 선을 60 아래로 이동 → 더블클릭으로 점 1개 추가 → 점 이동 → 선 전체를 40 아래로 이동 → 초기화 → Undo → 드래그 중 Esc | 수직 이동만으로 점이 늘지 않는다. 점이 있는 경로는 모양을 유지하며 이동한다. 초기화는 높이·점을 함께 복구하고 Undo로 되돌리며 취소는 코드를 바꾸지 않는다. | [m3-sequence-drag.spec.ts](../tests/system/m3-sequence-drag.spec.ts) |
 
 ## 2. 요구사항 추적표 (자동 생성)
 

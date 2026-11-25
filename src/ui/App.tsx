@@ -16,7 +16,7 @@ import { isAbortError, saveBlob } from '../adapters/download-blob';
 import type { IFileManager, IImageExporter } from '../core/contracts';
 import { nodeIds } from '../core/types';
 import { AlignmentSnap } from '../adapters/alignment-snap';
-import { writeRoute } from '../core/route-editing';
+import { writeRoute, writeSequenceOffset } from '../core/route-editing';
 import { canvasEdges } from '../core/diagram-geometry';
 import { LayoutInteraction } from '../core/layout-interaction';
 
@@ -73,11 +73,13 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
   const [savedSource, setSavedSource] = useState(() => store.getSnapshot().source);
   const dirty = snapshot.source !== savedSource;
   const [snapEnabled, setSnapEnabled] = useState(true);
-  function updateRoute(key: string, points: Array<{ x: number; y: number }>) {
+  function updateRoute(key: string, points: Array<{ x: number; y: number }>, offsetY?: number) {
     const current = store.getSnapshot();
     if (current.error) throw new Error('코드 오류를 수정한 뒤 편집하세요.');
     if (!canvasEdges(current).some(edge => edge.key === key)) throw new Error('없는 간선입니다.');
-    store.updateSource(writeRoute(current.source, key, points));
+    let source = writeRoute(current.source, key, points);
+    if (offsetY !== undefined) source = writeSequenceOffset(source, key, offsetY);
+    store.updateSource(source);
     const error = store.getSnapshot().error;
     if (error) throw new Error(error);
   }
