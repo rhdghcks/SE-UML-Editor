@@ -5,6 +5,7 @@ import type { BendPoint } from '../core/manual-routes';
 import { canvasEdges, firstSequenceRow, nearestPoint, sequenceLabelPosition, sequenceRowPositions, sequenceRows } from '../core/diagram-geometry';
 import type { CanvasEdge } from '../core/diagram-geometry';
 import { writeRoute, writeSequenceOffset } from '../core/route-editing';
+import type { EdgeStyle } from '../core/edge-style';
 import { MAX_ZOOM, MIN_ZOOM, fitViewport, panViewport, zoomViewport } from './canvas-viewport';
 import type { CanvasViewport } from './canvas-viewport';
 
@@ -294,101 +295,209 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
       node.kind === 'class' ? Math.max(75, 60 + count * 18) : 70));
   }
 
-  return <div className="canvas-editor">
-    <div className="canvas-tools">
-      <span>휠: 확대·축소 · 빈 공간 드래그: 화면 이동 · 시퀀스 선 드래그: 위아래 이동 · 선 더블클릭: 꺾임점 추가 · Esc: 취소</span>
-      <button aria-label="캔버스 축소" disabled={viewport.scale <= MIN_ZOOM} onClick={() => zoom(1 / 1.2)}>−</button>
-      <output className="canvas-zoom" aria-label="캔버스 배율">{Math.round(viewport.scale * 100)}%</output>
-      <button aria-label="캔버스 확대" disabled={viewport.scale >= MAX_ZOOM} onClick={() => zoom(1.2)}>+</button>
-      <button onClick={() => { cancel(); requestFit(value => value + 1); }}>보기 초기화</button>
-      <button disabled={disabled || !selected || Boolean(selectedEdge)} onClick={fitText}>텍스트에 맞추기</button>
-      <button disabled={disabled || !activeEdge || selectedBend === null} onClick={deleteBend}>꺾임점 삭제</button>
-      <button disabled={disabled || !activeEdge || (activeEdge.points.length === 2 && !activeEdge.sequence?.storedOffsetY)}
-        onClick={() => activeEdge && safely(() => {
-          onRouteChange(activeEdge.key, [], activeEdge.sequence ? 0 : undefined); setSelectedBend(null);
-        })}>경로 초기화</button>
+
+  const MARKER_PATHS = {
+    arrow: 'M 0 0 L 10 5 L 0 10 L 10 5 z',
+    triangle: 'M 0 0 L 10 5 L 0 10 z',
+    diamond: 'M 0 5 L 5 0 L 10 5 L 5 10 z',
+  } as const;
+
+  const MARKERS = {
+    none: undefined,
+    arrow: 'arrow',
+    triangleEmpty: 'triangle-empty',
+    triangleFilled: 'triangle-filled',
+    diamondEmpty: 'diamond-empty',
+    diamondFilled: 'diamond-filled',
+  } as const;
+
+  function createMarker(
+    id: string,
+    path: string,
+    filled: 'fill' | 'clear' | 'none'
+  ) {
+    return (
+      <marker
+        id={`${canvasId}-${id}`}
+        viewBox="0 0 10 10"
+        refX="10"
+        refY="5"
+        markerWidth="7"
+        markerHeight="7"
+        orient="auto-start-reverse"
+      >
+        <path
+          d={path}
+          fill={
+            filled === 'fill' ? '#596579' :
+              filled === 'clear' ? 'white' :
+                'none'
+          }
+          stroke="#596579"
+          strokeWidth={1.2}
+        />
+      </marker>
+    );
+  }
+
+
+  function getMarkerId(style: EdgeStyle) {
+    switch (style.marker) {
+      case 'none':
+        return MARKERS.none;
+
+      case 'arrow':
+        return MARKERS.arrow;
+
+      case 'triangle':
+        return style.markerFill
+          ? MARKERS.triangleFilled
+          : MARKERS.triangleEmpty;
+
+      case 'diamond':
+        return style.markerFill
+          ? MARKERS.diamondFilled
+          : MARKERS.diamondEmpty;
+    }
+  }
+
+  function drawEdge(edge: CanvasEdge) {
+    //label : 꺾임점중 이름을 띄울 위치
+    const middle = edge.points[Math.floor(edge.points.length / 2)];
+    const label = edge.points.length === 2 ? { x: (edge.points[0].x + edge.points[1].x) / 2, y: (edge.points[0].y + edge.points[1].y) / 2 } : middle;
+
+    //꺾임점들의 좌표들를 polyline에 맞는 문법으로 변환
+    const pointString = edge.points.map(p => `${p.x},${p.y}`).join(' ');
+
+    //더블클릭(꺾임점 생성) 동작 인식 함수
+    const doubleClickLine = (event: ReactMouseEvent<SVGPolylineElement>) => {
+      if (disabled) return;
+      event.stopPropagation(); const point = svgPoint(event.clientX, event.clientY);
+      if (point) addBend(edge, point);
+    };
+
+    //끝점 형태 정의를 url로 전환
+    const markerURL = `url(#${canvasId}-${getMarkerId(edge.style)})`
+
+
+    return (
+      <g key={edge.key} data-route-key={edge.key} className="canvas-edge"
+        onPointerDown={event => begin(event, { kind: 'edge', id: edge.key, edge })}>
+
+        {/* 클릭 감지용 선 */}
+        <polyline className="edge-hit"
+          points={pointString}
+          fill="none"
+          stroke="transparent" strokeWidth="14"
+          onDoubleClick={doubleClickLine} />
+
+        {/* 실제 보이는 선 */}
+        <polyline className="edge-line"
+          points={pointString}
+          fill="none"
+          stroke={selectedEdge === edge.key ? '#3367d6' : '#596579'}
+          strokeWidth="2"
+          strokeDasharray={edge.style.type == 'dashed' ? "6 5" : undefined}
+          {...(edge.style.markerPosition === 'start'
+            ? { markerStart: markerURL }
+            : { markerEnd: markerURL })}
+          onDoubleClick={doubleClickLine} />
+
+        {/* 이름 텍스트 */}
+        <text x={label.x} y={label.y - 10} textAnchor="middle" fontSize="15">{edge.label}</text>
+
+        {/* 꺾임점 */}
+        {selectedEdge === edge.key && edge.points.slice(1, -1).map((point, index) =>
+          <circle key={index} className="bend-handle" aria-label={`꺾임점 ${index + 1}`} cx={point.x} cy={point.y} r="7"
+            fill={selectedBend === index ? '#ffbd59' : 'white'} stroke="#3367d6" strokeWidth="2"
+            onPointerDown={event => begin(event, { kind: 'bend', id: edge.key, edge, bend: index })}
+            onDoubleClick={event => event.stopPropagation()} />)}
+
+      </g>);
+  }
+
+  return (
+    <div className="canvas-editor">
+      <div className="canvas-tools">
+        <span>휠: 확대·축소 · 빈 공간 드래그: 화면 이동 · 시퀀스 선 드래그: 위아래 이동 · 선 더블클릭: 꺾임점 추가 · Esc: 취소</span>
+        <button aria-label="캔버스 축소" disabled={viewport.scale <= MIN_ZOOM} onClick={() => zoom(1 / 1.2)}>−</button>
+        <output className="canvas-zoom" aria-label="캔버스 배율">{Math.round(viewport.scale * 100)}%</output>
+        <button aria-label="캔버스 확대" disabled={viewport.scale >= MAX_ZOOM} onClick={() => zoom(1.2)}>+</button>
+        <button onClick={() => { cancel(); requestFit(value => value + 1); }}>보기 초기화</button>
+        <button disabled={disabled || !selected || Boolean(selectedEdge)} onClick={fitText}>텍스트에 맞추기</button>
+        <button disabled={disabled || !activeEdge || selectedBend === null} onClick={deleteBend}>꺾임점 삭제</button>
+        <button disabled={disabled || !activeEdge || (activeEdge.points.length === 2 && !activeEdge.sequence?.storedOffsetY)}
+          onClick={() => activeEdge && safely(() => {
+            onRouteChange(activeEdge.key, [], activeEdge.sequence ? 0 : undefined); setSelectedBend(null);
+          })}>경로 초기화</button>
+      </div>
+      <svg ref={svg} className={panning ? 'diagram-svg is-panning' : 'diagram-svg'} tabIndex={0} aria-label="다이어그램 편집 캔버스"
+        viewBox={`0 0 ${width} ${height}`} onPointerDown={beginPan} onPointerMove={move} onPointerUp={finish}
+        onPointerCancel={event => { if (gesture.current?.pointerId === event.pointerId || pan.current?.pointerId === event.pointerId) cancel(); }}
+        onLostPointerCapture={event => { if (gesture.current?.pointerId === event.pointerId || pan.current?.pointerId === event.pointerId) cancel(); }}
+        onKeyDown={event => {
+          if (event.key === 'Escape') { event.preventDefault(); cancel(); }
+          if (!disabled && event.key === 'Delete' && selectedBend !== null) { event.preventDefault(); deleteBend(); }
+        }}>
+        <defs>
+          {createMarker(MARKERS.arrow, MARKER_PATHS.arrow, 'none')}
+          {createMarker(MARKERS.triangleEmpty, MARKER_PATHS.triangle, 'clear')}
+          {createMarker(MARKERS.triangleFilled, MARKER_PATHS.triangle, 'fill')}
+          {createMarker(MARKERS.diamondEmpty, MARKER_PATHS.diamond, 'clear')}
+          {createMarker(MARKERS.diamondFilled, MARKER_PATHS.diamond, 'fill')}
+        </defs>
+        <rect className="canvas-background" width={width} height={height} fill="white" />
+
+        <g ref={world} className="canvas-world" transform={`translate(${viewport.x + leftGutter * viewport.scale} ${viewport.y}) scale(${viewport.scale})`}>
+
+          {edges.map(edge => drawEdge(edge))}
+
+          {/* 시퀸스 다이어그램 steps */}
+          {model.kind === 'sequence' && model.participants.map(participant => {
+            const box = displayLayout[participant.id];
+            return box && <line key={participant.id} x1={box.x + box.width / 2} y1={box.y + box.height}
+              x2={box.x + box.width / 2} y2={height - 35} stroke="#9da7b6" strokeDasharray="6 5" pointerEvents="none" />;
+          })}
+
+          {/* 시퀸스 다이어그램의 라벨(좌측 텍스트) */}
+          {model.kind === 'sequence' && rows.map((row, index) => {
+            const label = sequenceLabelPosition(row, index, displayLayout, rowPositions[index]);
+            return label && <text key={row.id} className="sequence-annotation" data-sequence-row-id={row.id}
+              data-target-id={row.target} x={label.x} y={label.y} textAnchor={label.textAnchor}
+              fontSize="16" pointerEvents="none">{row.text}</text>;
+          })}
+
+          {/* 모든 노드 */}
+
+          {nodes.map((node, index) => {
+            const box = displayLayout[node.id];
+            if (!box) return null;
+            const active = selected === node.id && !selectedEdge;
+            const details = node.kind === 'class' ? [...node.attributes, ...node.methods] : [];
+            const clipId = `${canvasId}-node-${index}`;
+            const foreground = box.color === '#000000' ? 'white' : '#253149';
+            return <g key={node.id} data-node-id={node.id} className={disabled ? 'canvas-node disabled' : 'canvas-node'}
+              onPointerDown={event => begin(event, { kind: 'node', id: node.id, box: layout[node.id] })}>
+              <rect className="node-box" x={box.x} y={box.y} width={box.width} height={box.height} rx="4"
+                fill={box.color} stroke={active ? '#3367d6' : '#526078'} strokeWidth={active ? 3 : 1.5} />
+              <clipPath id={clipId}><path d={`M${box.x + 4},${box.y + 4}h${Math.max(1, box.width - 8)}v${Math.max(1, box.height - 8)}h${-Math.max(1, box.width - 8)}z`} /></clipPath>
+              <g clipPath={`url(#${clipId})`} pointerEvents="none">
+                <text data-content x={box.x + box.width / 2} y={box.y + 30} textAnchor="middle" fontSize="20" fontWeight="600" fill={foreground}>
+                  {node.kind === 'class' ? node.name : node.displayName}</text>
+                {node.kind === 'class' && <>
+                  <line x1={box.x} y1={box.y + 43} x2={box.x + box.width} y2={box.y + 43} stroke="#9da7b6" />
+                  {details.map((line, i) => <text data-content key={i} x={box.x + 12} y={box.y + 65 + i * 18} fontSize="13" fill={foreground}>{line}</text>)}
+                </>}
+              </g>
+              {active && !disabled && <path className="resize-handle" aria-label={`${node.name} 크기 조절`}
+                d={`M${box.x + box.width - 12},${box.y + box.height - 12}h12v12h-12z`} fill="#3367d6"
+                onPointerDown={event => begin(event, { kind: 'resize', id: node.id, box: layout[node.id] })} />}
+            </g>;
+          })}
+
+
+        </g>
+      </svg>
     </div>
-    <svg ref={svg} className={panning ? 'diagram-svg is-panning' : 'diagram-svg'} tabIndex={0} aria-label="다이어그램 편집 캔버스"
-      viewBox={`0 0 ${width} ${height}`} onPointerDown={beginPan} onPointerMove={move} onPointerUp={finish}
-      onPointerCancel={event => { if (gesture.current?.pointerId === event.pointerId || pan.current?.pointerId === event.pointerId) cancel(); }}
-      onLostPointerCapture={event => { if (gesture.current?.pointerId === event.pointerId || pan.current?.pointerId === event.pointerId) cancel(); }}
-      onKeyDown={event => {
-        if (event.key === 'Escape') { event.preventDefault(); cancel(); }
-        if (!disabled && event.key === 'Delete' && selectedBend !== null) { event.preventDefault(); deleteBend(); }
-      }}>
-      <defs><marker id={`${canvasId}-arrow`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-        <path d="M 0 0 L 10 5 L 0 10 z" fill="#596579" /></marker></defs>
-      <rect className="canvas-background" width={width} height={height} fill="white" />
-
-      <g ref={world} className="canvas-world" transform={`translate(${viewport.x + leftGutter * viewport.scale} ${viewport.y}) scale(${viewport.scale})`}>
-
-        {edges.map(edge => {
-          const middle = edge.points[Math.floor(edge.points.length / 2)];
-          const label = edge.points.length === 2 ? { x: (edge.points[0].x + edge.points[1].x) / 2, y: (edge.points[0].y + edge.points[1].y) / 2 } : middle;
-          const pointString = edge.points.map(p => `${p.x},${p.y}`).join(' ');
-          const doubleClickLine = (event: ReactMouseEvent<SVGPolylineElement>) => {
-            if (disabled) return;
-            event.stopPropagation(); const point = svgPoint(event.clientX, event.clientY);
-            if (point) addBend(edge, point);
-          };
-          return <g key={edge.key} data-route-key={edge.key} className="canvas-edge"
-            onPointerDown={event => begin(event, { kind: 'edge', id: edge.key, edge })}>
-            <polyline className="edge-hit" points={pointString} fill="none" stroke="transparent" strokeWidth="14" onDoubleClick={doubleClickLine} />
-            <polyline className="edge-line" points={pointString} fill="none" stroke={selectedEdge === edge.key ? '#3367d6' : '#596579'}
-              strokeWidth="2" markerEnd={`url(#${canvasId}-arrow)`} onDoubleClick={doubleClickLine} />
-            <text x={label.x} y={label.y - 10} textAnchor="middle" fontSize="15">{edge.label}</text>
-            {selectedEdge === edge.key && edge.points.slice(1, -1).map((point, index) =>
-              <circle key={index} className="bend-handle" aria-label={`꺾임점 ${index + 1}`} cx={point.x} cy={point.y} r="7"
-                fill={selectedBend === index ? '#ffbd59' : 'white'} stroke="#3367d6" strokeWidth="2"
-                onPointerDown={event => begin(event, { kind: 'bend', id: edge.key, edge, bend: index })}
-                onDoubleClick={event => event.stopPropagation()} />)}
-          </g>;
-        })}
-
-        {/* 시퀸스 다이어그램 steps */}
-        {model.kind === 'sequence' && model.participants.map(participant => {
-          const box = displayLayout[participant.id];
-          return box && <line key={participant.id} x1={box.x + box.width / 2} y1={box.y + box.height}
-            x2={box.x + box.width / 2} y2={height - 35} stroke="#9da7b6" strokeDasharray="6 5" pointerEvents="none" />;
-        })}
-
-        {/* 시퀸스 다이어그램의 라벨(좌측 텍스트) */}
-        {model.kind === 'sequence' && rows.map((row, index) => {
-          const label = sequenceLabelPosition(row, index, displayLayout, rowPositions[index]);
-          return label && <text key={row.id} className="sequence-annotation" data-sequence-row-id={row.id}
-            data-target-id={row.target} x={label.x} y={label.y} textAnchor={label.textAnchor}
-            fontSize="16" pointerEvents="none">{row.text}</text>;
-        })}
-
-        {/* 모든 노드 */}
-        {nodes.map((node, index) => {
-          const box = displayLayout[node.id];
-          if (!box) return null;
-          const active = selected === node.id && !selectedEdge;
-          const details = node.kind === 'class' ? [...node.attributes, ...node.methods] : [];
-          const clipId = `${canvasId}-node-${index}`;
-          const foreground = box.color === '#000000' ? 'white' : '#253149';
-          return <g key={node.id} data-node-id={node.id} className={disabled ? 'canvas-node disabled' : 'canvas-node'}
-            onPointerDown={event => begin(event, { kind: 'node', id: node.id, box: layout[node.id] })}>
-            <rect className="node-box" x={box.x} y={box.y} width={box.width} height={box.height} rx="4"
-              fill={box.color} stroke={active ? '#3367d6' : '#526078'} strokeWidth={active ? 3 : 1.5} />
-            <clipPath id={clipId}><path d={`M${box.x + 4},${box.y + 4}h${Math.max(1, box.width - 8)}v${Math.max(1, box.height - 8)}h${-Math.max(1, box.width - 8)}z`} /></clipPath>
-            <g clipPath={`url(#${clipId})`} pointerEvents="none">
-              <text data-content x={box.x + box.width / 2} y={box.y + 30} textAnchor="middle" fontSize="20" fontWeight="600" fill={foreground}>
-                {node.kind === 'class' ? node.name : node.displayName}</text>
-              {node.kind === 'class' && <>
-                <line x1={box.x} y1={box.y + 43} x2={box.x + box.width} y2={box.y + 43} stroke="#9da7b6" />
-                {details.map((line, i) => <text data-content key={i} x={box.x + 12} y={box.y + 65 + i * 18} fontSize="13" fill={foreground}>{line}</text>)}
-              </>}
-            </g>
-            {active && !disabled && <path className="resize-handle" aria-label={`${node.name} 크기 조절`}
-              d={`M${box.x + box.width - 12},${box.y + box.height - 12}h12v12h-12z`} fill="#3367d6"
-              onPointerDown={event => begin(event, { kind: 'resize', id: node.id, box: layout[node.id] })} />}
-          </g>;
-        })}
-
-
-      </g>
-    </svg>
-  </div>;
+  );
 }
