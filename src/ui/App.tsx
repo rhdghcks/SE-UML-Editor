@@ -211,6 +211,22 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
 
+
+  const errorLine = snapshot.error ?
+    Number(snapshot.error.match(/^(\d+)행:/)?.[1]) || null
+    : null;
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lineNumbersRef = useRef<HTMLDivElement>(null);
+  const syncScroll = () => {
+    const textarea = textareaRef.current;
+
+    if (!textarea || !lineNumbersRef.current) return;
+
+    lineNumbersRef.current.style.transform =
+      `translateY(${-textarea.scrollTop}px)`;
+  };
+
   return <main className="app">
     <header className="app-header">
       <div>
@@ -273,9 +289,23 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
     <div className="workspace">
       <section className="code-panel">
         <div className="panel-heading">Mermaid 코드</div>
-        <textarea spellCheck="false" aria-label="Mermaid 코드"
-          value={snapshot.source} onBlur={() => { typing.current.lastInput = -Infinity; }}
-          onChange={(event) => editCode(event.target.value)} />
+        <div className="code-editor">
+          <div className="line-numbers" aria-hidden="true">
+            <div ref={lineNumbersRef}>
+              {snapshot.source.split('\n').map((_, index) => (
+                <div key={index} className={errorLine === index + 1 ? 'error-line' : ''}>
+                  {index + 1}
+                </div>
+              ))}
+            </div>
+          </div>
+          <textarea className="code-input-area"
+            ref={textareaRef}
+            spellCheck="false" aria-label="Mermaid 코드"
+            value={snapshot.source} onBlur={() => { typing.current.lastInput = -Infinity; }}
+            onChange={(event) => editCode(event.target.value)}
+            onScroll={syncScroll} />
+        </div>
         <div className={snapshot.error ? 'feedback error' : 'feedback'}>
           {snapshot.error ?? '코드가 유효합니다. 캔버스에서 노드를 드래그해 보세요.'}
         </div>
