@@ -22,7 +22,7 @@ interface Props {
 }
 
 type Preview = { kind: 'node'; id: string; box: NodeLayout } |
-  { kind: 'route'; key: string; points: BendPoint[]; offsetY?: number };
+{ kind: 'route'; key: string; points: BendPoint[]; offsetY?: number };
 interface Gesture {
   kind: 'node' | 'resize' | 'edge' | 'bend';
   pointerId: number;
@@ -87,7 +87,7 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
   const width = Math.max(900, ...Object.values(layout).map(box => box.x + box.width + 60), ...points.map(p => p.x + 32)) + leftGutter;
   const height = Math.max(480, ...Object.values(layout).map(box => box.y + box.height + 100),
     ...points.map(p => p.y + 40), model.kind === 'sequence'
-      ? (sequenceRowPositions(shown).at(-1) ?? firstSequenceRow(layout)) + 65 : 0);
+    ? (sequenceRowPositions(shown).at(-1) ?? firstSequenceRow(layout)) + 65 : 0);
 
   function releaseLayout() {
     const release = releaseInteraction.current;
@@ -114,7 +114,7 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
   }
   useEffect(() => {
     if (disabled || (gesture.current && gesture.current.document !== document) ||
-        (pan.current && pan.current.document !== document)) cancel();
+      (pan.current && pan.current.document !== document)) cancel();
   }, [document, disabled]);
   useEffect(() => () => { gesture.current = null; pan.current = null; releaseLayout(); }, []);
   useEffect(() => {
@@ -190,22 +190,30 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
   function calculate(current: Gesture, point: BendPoint): Preview {
     const dx = point.x - current.start.x, dy = point.y - current.start.y;
     if (current.kind === 'node' && current.box) {
-      const position = snapNode({ x: Math.round(Math.max(0, current.box.x + dx)),
-        y: Math.round(Math.max(0, current.box.y + dy)) }, current.id);
+      const position = snapNode({
+        x: Math.round(Math.max(0, current.box.x + dx)),
+        y: Math.round(Math.max(0, current.box.y + dy))
+      }, current.id);
       return { kind: 'node', id: current.id, box: { ...current.box, ...position } };
     }
     if (current.kind === 'resize' && current.box) {
-      return { kind: 'node', id: current.id, box: { ...current.box,
-        width: Math.round(Math.max(80, current.box.width + dx)),
-        height: Math.round(Math.max(55, current.box.height + dy)) } };
+      return {
+        kind: 'node', id: current.id, box: {
+          ...current.box,
+          width: Math.round(Math.max(80, current.box.width + dx)),
+          height: Math.round(Math.max(55, current.box.height + dy))
+        }
+      };
     }
     const edge = current.edge!;
     let bends = edge.points.slice(1, -1).map(p => ({ ...p }));
     if (current.kind === 'edge' && edge.sequence) {
       const delta = Math.max(Math.round(edge.points[0].y + dy) - edge.points[0].y, edge.sequence.minY - edge.points[0].y,
         bends.length ? -Math.min(...bends.map(point => point.y)) : -Infinity);
-      return { kind: 'route', key: edge.key, points: bends.map(p => ({ x: p.x, y: p.y + delta })),
-        offsetY: delta === 0 ? undefined : edge.sequence.offsetY + delta };
+      return {
+        kind: 'route', key: edge.key, points: bends.map(p => ({ x: p.x, y: p.y + delta })),
+        offsetY: delta === 0 ? undefined : edge.sequence.offsetY + delta
+      };
     }
     if (current.kind === 'bend' && current.bend !== undefined) {
       bends[current.bend] = { x: Math.max(0, bends[current.bend].x + dx), y: Math.max(0, bends[current.bend].y + dy) };
@@ -285,6 +293,7 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
     safely(() => onResize(node.id, Math.ceil(Math.max(100, ...lengths.map(length => length + 24))),
       node.kind === 'class' ? Math.max(75, 60 + count * 18) : 70));
   }
+
   return <div className="canvas-editor">
     <div className="canvas-tools">
       <span>휠: 확대·축소 · 빈 공간 드래그: 화면 이동 · 시퀀스 선 드래그: 위아래 이동 · 선 더블클릭: 꺾임점 추가 · Esc: 취소</span>
@@ -310,65 +319,75 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
       <defs><marker id={`${canvasId}-arrow`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
         <path d="M 0 0 L 10 5 L 0 10 z" fill="#596579" /></marker></defs>
       <rect className="canvas-background" width={width} height={height} fill="white" />
+
       <g ref={world} className="canvas-world" transform={`translate(${viewport.x + leftGutter * viewport.scale} ${viewport.y}) scale(${viewport.scale})`}>
-      {edges.map(edge => {
-        const middle = edge.points[Math.floor(edge.points.length / 2)];
-        const label = edge.points.length === 2 ? { x: (edge.points[0].x + edge.points[1].x) / 2, y: (edge.points[0].y + edge.points[1].y) / 2 } : middle;
-        const pointString = edge.points.map(p => `${p.x},${p.y}`).join(' ');
-        const doubleClickLine = (event: ReactMouseEvent<SVGPolylineElement>) => {
+
+        {edges.map(edge => {
+          const middle = edge.points[Math.floor(edge.points.length / 2)];
+          const label = edge.points.length === 2 ? { x: (edge.points[0].x + edge.points[1].x) / 2, y: (edge.points[0].y + edge.points[1].y) / 2 } : middle;
+          const pointString = edge.points.map(p => `${p.x},${p.y}`).join(' ');
+          const doubleClickLine = (event: ReactMouseEvent<SVGPolylineElement>) => {
             if (disabled) return;
             event.stopPropagation(); const point = svgPoint(event.clientX, event.clientY);
             if (point) addBend(edge, point);
-        };
-        return <g key={edge.key} data-route-key={edge.key} className="canvas-edge"
-          onPointerDown={event => begin(event, { kind: 'edge', id: edge.key, edge })}>
-          <polyline className="edge-hit" points={pointString} fill="none" stroke="transparent" strokeWidth="14" onDoubleClick={doubleClickLine} />
-          <polyline className="edge-line" points={pointString} fill="none" stroke={selectedEdge === edge.key ? '#3367d6' : '#596579'}
-            strokeWidth="2" markerEnd={`url(#${canvasId}-arrow)`} onDoubleClick={doubleClickLine} />
-          <text x={label.x} y={label.y - 10} textAnchor="middle" fontSize="15">{edge.label}</text>
-          {selectedEdge === edge.key && edge.points.slice(1, -1).map((point, index) =>
-            <circle key={index} className="bend-handle" aria-label={`꺾임점 ${index + 1}`} cx={point.x} cy={point.y} r="7"
-              fill={selectedBend === index ? '#ffbd59' : 'white'} stroke="#3367d6" strokeWidth="2"
-              onPointerDown={event => begin(event, { kind: 'bend', id: edge.key, edge, bend: index })}
-              onDoubleClick={event => event.stopPropagation()} />)}
-        </g>;
-      })}
-      {model.kind === 'sequence' && model.participants.map(participant => {
-        const box = displayLayout[participant.id];
-        return box && <line key={participant.id} x1={box.x + box.width / 2} y1={box.y + box.height}
-          x2={box.x + box.width / 2} y2={height - 35} stroke="#9da7b6" strokeDasharray="6 5" pointerEvents="none" />;
-      })}
-      {model.kind === 'sequence' && rows.map((row, index) => {
-        const label = sequenceLabelPosition(row, index, displayLayout, rowPositions[index]);
-        return label && <text key={row.id} className="sequence-annotation" data-sequence-row-id={row.id}
-          data-target-id={row.target} x={label.x} y={label.y} textAnchor={label.textAnchor}
-          fontSize="16" pointerEvents="none">{row.text}</text>;
-      })}
-      {nodes.map((node, index) => {
-        const box = displayLayout[node.id];
-        if (!box) return null;
-        const active = selected === node.id && !selectedEdge;
-        const details = node.kind === 'class' ? [...node.attributes, ...node.methods] : [];
-        const clipId = `${canvasId}-node-${index}`;
-        const foreground = box.color === '#000000' ? 'white' : '#253149';
-        return <g key={node.id} data-node-id={node.id} className={disabled ? 'canvas-node disabled' : 'canvas-node'}
-          onPointerDown={event => begin(event, { kind: 'node', id: node.id, box: layout[node.id] })}>
-          <rect className="node-box" x={box.x} y={box.y} width={box.width} height={box.height} rx="4"
-            fill={box.color} stroke={active ? '#3367d6' : '#526078'} strokeWidth={active ? 3 : 1.5} />
-          <clipPath id={clipId}><path d={`M${box.x + 4},${box.y + 4}h${Math.max(1, box.width - 8)}v${Math.max(1, box.height - 8)}h${-Math.max(1, box.width - 8)}z`} /></clipPath>
-          <g clipPath={`url(#${clipId})`} pointerEvents="none">
-            <text data-content x={box.x + box.width / 2} y={box.y + 30} textAnchor="middle" fontSize="20" fontWeight="600" fill={foreground}>
-              {node.kind === 'class' ? node.name : node.displayName}</text>
-            {node.kind === 'class' && <>
-              <line x1={box.x} y1={box.y + 43} x2={box.x + box.width} y2={box.y + 43} stroke="#9da7b6" />
-              {details.map((line, i) => <text data-content key={i} x={box.x + 12} y={box.y + 65 + i * 18} fontSize="13" fill={foreground}>{line}</text>)}
-            </>}
-          </g>
-          {active && !disabled && <path className="resize-handle" aria-label={`${node.name} 크기 조절`}
-            d={`M${box.x + box.width - 12},${box.y + box.height - 12}h12v12h-12z`} fill="#3367d6"
-            onPointerDown={event => begin(event, { kind: 'resize', id: node.id, box: layout[node.id] })} />}
-        </g>;
-      })}
+          };
+          return <g key={edge.key} data-route-key={edge.key} className="canvas-edge"
+            onPointerDown={event => begin(event, { kind: 'edge', id: edge.key, edge })}>
+            <polyline className="edge-hit" points={pointString} fill="none" stroke="transparent" strokeWidth="14" onDoubleClick={doubleClickLine} />
+            <polyline className="edge-line" points={pointString} fill="none" stroke={selectedEdge === edge.key ? '#3367d6' : '#596579'}
+              strokeWidth="2" markerEnd={`url(#${canvasId}-arrow)`} onDoubleClick={doubleClickLine} />
+            <text x={label.x} y={label.y - 10} textAnchor="middle" fontSize="15">{edge.label}</text>
+            {selectedEdge === edge.key && edge.points.slice(1, -1).map((point, index) =>
+              <circle key={index} className="bend-handle" aria-label={`꺾임점 ${index + 1}`} cx={point.x} cy={point.y} r="7"
+                fill={selectedBend === index ? '#ffbd59' : 'white'} stroke="#3367d6" strokeWidth="2"
+                onPointerDown={event => begin(event, { kind: 'bend', id: edge.key, edge, bend: index })}
+                onDoubleClick={event => event.stopPropagation()} />)}
+          </g>;
+        })}
+
+        {/* 시퀸스 다이어그램 steps */}
+        {model.kind === 'sequence' && model.participants.map(participant => {
+          const box = displayLayout[participant.id];
+          return box && <line key={participant.id} x1={box.x + box.width / 2} y1={box.y + box.height}
+            x2={box.x + box.width / 2} y2={height - 35} stroke="#9da7b6" strokeDasharray="6 5" pointerEvents="none" />;
+        })}
+
+        {/* 시퀸스 다이어그램의 라벨(좌측 텍스트) */}
+        {model.kind === 'sequence' && rows.map((row, index) => {
+          const label = sequenceLabelPosition(row, index, displayLayout, rowPositions[index]);
+          return label && <text key={row.id} className="sequence-annotation" data-sequence-row-id={row.id}
+            data-target-id={row.target} x={label.x} y={label.y} textAnchor={label.textAnchor}
+            fontSize="16" pointerEvents="none">{row.text}</text>;
+        })}
+
+        {/* 모든 노드 */}
+        {nodes.map((node, index) => {
+          const box = displayLayout[node.id];
+          if (!box) return null;
+          const active = selected === node.id && !selectedEdge;
+          const details = node.kind === 'class' ? [...node.attributes, ...node.methods] : [];
+          const clipId = `${canvasId}-node-${index}`;
+          const foreground = box.color === '#000000' ? 'white' : '#253149';
+          return <g key={node.id} data-node-id={node.id} className={disabled ? 'canvas-node disabled' : 'canvas-node'}
+            onPointerDown={event => begin(event, { kind: 'node', id: node.id, box: layout[node.id] })}>
+            <rect className="node-box" x={box.x} y={box.y} width={box.width} height={box.height} rx="4"
+              fill={box.color} stroke={active ? '#3367d6' : '#526078'} strokeWidth={active ? 3 : 1.5} />
+            <clipPath id={clipId}><path d={`M${box.x + 4},${box.y + 4}h${Math.max(1, box.width - 8)}v${Math.max(1, box.height - 8)}h${-Math.max(1, box.width - 8)}z`} /></clipPath>
+            <g clipPath={`url(#${clipId})`} pointerEvents="none">
+              <text data-content x={box.x + box.width / 2} y={box.y + 30} textAnchor="middle" fontSize="20" fontWeight="600" fill={foreground}>
+                {node.kind === 'class' ? node.name : node.displayName}</text>
+              {node.kind === 'class' && <>
+                <line x1={box.x} y1={box.y + 43} x2={box.x + box.width} y2={box.y + 43} stroke="#9da7b6" />
+                {details.map((line, i) => <text data-content key={i} x={box.x + 12} y={box.y + 65 + i * 18} fontSize="13" fill={foreground}>{line}</text>)}
+              </>}
+            </g>
+            {active && !disabled && <path className="resize-handle" aria-label={`${node.name} 크기 조절`}
+              d={`M${box.x + box.width - 12},${box.y + box.height - 12}h12v12h-12z`} fill="#3367d6"
+              onPointerDown={event => begin(event, { kind: 'resize', id: node.id, box: layout[node.id] })} />}
+          </g>;
+        })}
+
+
       </g>
     </svg>
   </div>;

@@ -1,4 +1,10 @@
-import type { DiagramDocument, LayoutMap, SequenceStep } from './types';
+import type { DiagramDocument, LayoutMap, SequenceStep, MessageArrow } from './types';
+import {
+  getEdgeStyle_ClassDiagram,
+  getEdgeStyle_SequenceDiagram
+} from './edge-style';
+
+import type { EdgeStyle } from './edge-style';
 import { readRoutes, readSequenceOffsets, routeKeys } from './manual-routes';
 import type { BendPoint } from './manual-routes';
 
@@ -16,8 +22,10 @@ export interface SequenceRow {
 export function sequenceRows(steps: SequenceStep[], depth = 0): SequenceRow[] {
   return steps.flatMap((step): SequenceRow[] => {
     if (step.kind === 'message') return [{ ...step, depth }];
-    if (step.kind === 'activation') return [{ id: step.id, depth, target: step.target,
-      text: `${step.action}: ${step.target.replace(/^participant:/, '')}` }];
+    if (step.kind === 'activation') return [{
+      id: step.id, depth, target: step.target,
+      text: `${step.action}: ${step.target.replace(/^participant:/, '')}`
+    }];
     const branches = step.branches.map(branch => ({ ...branch, rows: sequenceRows(branch.steps, depth + 1) }));
     const participants = [...new Set(branches.flatMap(branch => branch.rows.flatMap(row =>
       row.from && row.to ? [row.from, row.to] : row.target ? [row.target] : [])))];
@@ -57,6 +65,7 @@ export interface CanvasEdge {
   from: string;
   to: string;
   points: BendPoint[];
+  style: EdgeStyle;
   sequence?: { offsetY: number; storedOffsetY: number; minY: number };
 }
 
@@ -92,9 +101,12 @@ export function canvasEdges(document: DiagramDocument): CanvasEdge[] {
     return model.relations.flatMap((edge, index) => {
       const a = layout[edge.from], b = layout[edge.to];
       if (!a || !b) return [];
-      return [{ key: keys[index], label: edge.label, from: edge.from, to: edge.to,
+      return [{
+        key: keys[index], label: edge.label, from: edge.from, to: edge.to,
         points: [{ x: a.x + a.width / 2, y: a.y + a.height / 2 },
-          ...(routes.get(keys[index]) ?? []), { x: b.x + b.width / 2, y: b.y + b.height / 2 }] }];
+        ...(routes.get(keys[index]) ?? []), { x: b.x + b.width / 2, y: b.y + b.height / 2 }],
+        style: getEdgeStyle_ClassDiagram(edge.connector)
+      }];
     });
   }
   const keys = sequenceRouteKeys(model.steps);
@@ -107,10 +119,15 @@ export function canvasEdges(document: DiagramDocument): CanvasEdge[] {
     const a = layout[row.from], b = layout[row.to];
     if (!a || !b) return [];
     const y = positions[index];
-    return [{ key, label: row.text, from: row.from, to: row.to,
-      sequence: { offsetY: y - firstSequenceRow(layout) - index * 65, storedOffsetY: offsets.get(key) ?? 0,
-        minY: index ? positions[index - 1] + 24 : sequenceContentTop(layout) },
-      points: [{ x: a.x + a.width / 2, y }, ...(routes.get(key) ?? []), { x: b.x + b.width / 2, y }] }];
+    return [{
+      key, label: row.text, from: row.from, to: row.to,
+      sequence: {
+        offsetY: y - firstSequenceRow(layout) - index * 65, storedOffsetY: offsets.get(key) ?? 0,
+        minY: index ? positions[index - 1] + 24 : sequenceContentTop(layout)
+      },
+      points: [{ x: a.x + a.width / 2, y }, ...(routes.get(key) ?? []), { x: b.x + b.width / 2, y }],
+      style: getEdgeStyle_SequenceDiagram((row.arrow ?? '->>') as MessageArrow)
+    }];
   });
 }
 

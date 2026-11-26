@@ -25,21 +25,32 @@ const CLASS_EXAMPLE = `classDiagram
     +name: string
     +login()
   }
-  class Session
-  User --> Session : creates`;
+  User <|-- Session1
+  User --|> Session2
+  User *-- Session3
+  User o-- Session4
+
+  User2 --> Session5
+  User2 -- Session6
+  User2 ..> Session7
+  User2 ..|> Session8`;
 
 const SEQUENCE_EXAMPLE = `sequenceDiagram
-  participant User
-  participant Server
-  User->>Server: login()
-  activate Server
-  Server-->>User: token
-  deactivate Server
-  alt valid token
-    User->>Server: getProfile()
-  else expired
-    Server-->>User: unauthorized
-  end`;
+participant User
+participant Server
+
+User->>Server: login()
+activate Server
+Server-->>User: token
+deactivate Server
+
+alt valid token
+  User --> Server: getProfile()
+else expired
+  Server -> User: unauthorized
+end
+User -> User : ee
+Server --> Server : ff`;
 
 const snap: AlignmentSnap = new AlignmentSnap(() => store.getSnapshot());
 const interaction = new LayoutInteraction();
