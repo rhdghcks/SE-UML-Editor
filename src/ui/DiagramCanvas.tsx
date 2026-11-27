@@ -12,14 +12,13 @@ import type { CanvasViewport } from './canvas-viewport';
 interface Props {
   document: DiagramDocument;
   disabled: boolean;
-  selected: string | null;
-  onSelect(id: string): void;
   onMove(id: string, x: number, y: number): void;
   onResize(id: string, width: number, height: number): void;
   onRouteChange(key: string, points: BendPoint[], offsetY?: number): void;
   onError(message: string): void;
   onInteractionStart(): () => void;
   snapNode(point: BendPoint, id: string): BendPoint;
+  onChangeNodeColor(id: string, color: string): void;
 }
 
 type Preview = { kind: 'node'; id: string; box: NodeLayout } |
@@ -42,8 +41,13 @@ interface PanGesture {
   document: DiagramDocument;
 }
 
-export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, onResize,
-  onRouteChange, onError, onInteractionStart, snapNode }: Props) {
+const COLORS = ['#000000', '#ffffff', '#e8eefb', '#dff2e5', '#fff0ce', '#f9dfdf', '#e9ddf7'];
+
+export function DiagramCanvas({ document, disabled, onMove, onResize,
+  onRouteChange, onError, onInteractionStart, snapNode, onChangeNodeColor }: Props) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const currentNode = selected ? document.layout[selected] : undefined;
+
   const svg = useRef<SVGSVGElement>(null);
   const world = useRef<SVGGElement>(null);
   const canvasId = useId().replace(/:/g, '');
@@ -176,16 +180,19 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
     event.stopPropagation(); event.preventDefault();
     svg.current?.focus({ preventScroll: true });
     // Sequence arrows move vertically without creating bends. Straight class edges are selection-only.
-    if (data.kind === 'edge' && !data.edge?.sequence && data.edge?.points.length === 2) {
-      setSelectedEdge(data.id); setSelectedBend(null); return;
+    if (data.kind === 'edge') {
+      setSelected(null);
+      if(!data.edge?.sequence && data.edge?.points.length === 2) {
+        setSelectedEdge(data.id); setSelectedBend(null); return;
+      }
     }
     // Keep click/double-click targeted at the line, rather than retargeting them to its group.
-    const capture = data.kind === 'edge' && event.target instanceof SVGElement ? event.target : event.currentTarget;
+    const capture = event.target instanceof SVGElement ? event.target : event.currentTarget;
     capture.setPointerCapture(event.pointerId);
     releaseInteraction.current = onInteractionStart();
     gesture.current = { ...data, start, pointerId: event.pointerId, document, moved: false };
     if (data.kind === 'node' || data.kind === 'resize') {
-      onSelect(data.id); setSelectedEdge(null); setSelectedBend(null);
+      setSelected(data.id); setSelectedEdge(null); setSelectedBend(null);
     } else { setSelectedEdge(data.id); setSelectedBend(data.bend ?? null); }
   }
   function calculate(current: Gesture, point: BendPoint): Preview {
@@ -379,7 +386,6 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
     //끝점 형태 정의를 url로 전환
     const markerURL = `url(#${canvasId}-${getMarkerId(edge.style)})`
 
-
     return (
       <g key={edge.key} data-route-key={edge.key} className="canvas-edge"
         onPointerDown={event => begin(event, { kind: 'edge', id: edge.key, edge })}>
@@ -412,7 +418,6 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
             fill={selectedBend === index ? '#ffbd59' : 'white'} stroke="#3367d6" strokeWidth="2"
             onPointerDown={event => begin(event, { kind: 'bend', id: edge.key, edge, bend: index })}
             onDoubleClick={event => event.stopPropagation()} />)}
-
       </g>);
   }
 
@@ -431,6 +436,17 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
             onRouteChange(activeEdge.key, [], activeEdge.sequence ? 0 : undefined); setSelectedBend(null);
           })}>경로 초기화</button>
       </div>
+
+      <div className="selection-bar">
+        {selected && currentNode ? <>
+          <span>선택: {selected}</span>
+          <span>색상</span>
+          {COLORS.map((color) => <button key={color} className="swatch"
+            title={color} style={{ backgroundColor: color }} disabled={disabled}
+            onClick={() => onChangeNodeColor(selected, color)} />)}
+        </> : <span>노드를 선택하면 색상을 바꿀 수 있습니다.</span>}
+      </div>
+
       <svg ref={svg} className={panning ? 'diagram-svg is-panning' : 'diagram-svg'} tabIndex={0} aria-label="다이어그램 편집 캔버스"
         viewBox={`0 0 ${width} ${height}`} onPointerDown={beginPan} onPointerMove={move} onPointerUp={finish}
         onPointerCancel={event => { if (gesture.current?.pointerId === event.pointerId || pan.current?.pointerId === event.pointerId) cancel(); }}
@@ -450,9 +466,10 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
 
         <g ref={world} className="canvas-world" transform={`translate(${viewport.x + leftGutter * viewport.scale} ${viewport.y}) scale(${viewport.scale})`}>
 
+          {/* 모든 관계선 */}
           {edges.map(edge => drawEdge(edge))}
 
-          {/* 시퀸스 다이어그램 steps */}
+          {/* 시퀸스 다이어그램 steps 줄 */}
           {model.kind === 'sequence' && model.participants.map(participant => {
             const box = displayLayout[participant.id];
             return box && <line key={participant.id} x1={box.x + box.width / 2} y1={box.y + box.height}
@@ -468,7 +485,6 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
           })}
 
           {/* 모든 노드 */}
-
           {nodes.map((node, index) => {
             const box = displayLayout[node.id];
             if (!box) return null;
@@ -494,8 +510,6 @@ export function DiagramCanvas({ document, disabled, selected, onSelect, onMove, 
                 onPointerDown={event => begin(event, { kind: 'resize', id: node.id, box: layout[node.id] })} />}
             </g>;
           })}
-
-
         </g>
       </svg>
     </div>

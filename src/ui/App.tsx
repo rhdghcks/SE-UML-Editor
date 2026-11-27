@@ -56,7 +56,6 @@ const snap: AlignmentSnap = new AlignmentSnap(() => store.getSnapshot());
 const interaction = new LayoutInteraction();
 const store: DiagramStore = new DiagramStore(new MermaidParser(new BasicMermaidParser(), await loadMermaidRuntime()), new GridLayout(), SEQUENCE_EXAMPLE, snap,
   (model, boxes, added) => interaction.complete(arrangeClasses(model, boxes, added)));
-const COLORS = ['#000000', '#ffffff', '#e8eefb', '#dff2e5', '#fff0ce', '#f9dfdf', '#e9ddf7'];
 
 const defaultFiles = new LocalFileManager();
 const renderer = new MermaidRenderer();
@@ -75,8 +74,6 @@ interface AppProps {
 
 export function App({ exporter = defaultExporter, saveImage = saveBlob, files = defaultFiles }: AppProps = {}) {
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-  const [selected, setSelected] = useState<string | null>(null);
-  const currentNode = selected ? snapshot.layout[selected] : undefined;
 
   const [nodeName, setNodeName] = useState('');
   const [standard, setStandard] = useState(false);
@@ -107,7 +104,6 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
   const opened = () => {
     documentGeneration.current++;
     files.reset?.();
-    setSelected(null);
     setSavedSource(store.getSnapshot().source);
   };
   const openExample = (source: string) => {
@@ -324,19 +320,11 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
       <section className="canvas-panel">
         <div className="panel-heading">캔버스 (개발용 미리보기)</div>
         {standard ? <MermaidPreview document={snapshot} renderer={renderer} /> : <DiagramCanvas document={snapshot} disabled={Boolean(snapshot.error)}
-          selected={selected} onSelect={setSelected} onMove={store.moveNode} onResize={store.resizeNode}
+          onMove={store.moveNode} onResize={store.resizeNode}
           onRouteChange={updateRoute} onError={setFileError}
           onInteractionStart={() => interaction.begin()}
-          snapNode={(point, id) => snap.snap(point, id, store.getSnapshot().layout)} />}
-        <div className="selection-bar">
-          {selected && currentNode ? <>
-            <span>선택: {selected}</span>
-            <span>색상</span>
-            {COLORS.map((color) => <button key={color} className="swatch"
-              title={color} style={{ backgroundColor: color }} disabled={Boolean(snapshot.error)}
-              onClick={() => store.setNodeColor(selected, color)} />)}
-          </> : <span>노드를 선택하면 색상을 바꿀 수 있습니다.</span>}
-        </div>
+          snapNode={(point, id) => snap.snap(point, id, store.getSnapshot().layout)}
+          onChangeNodeColor={store.setNodeColor} />}
       </section>
     </div>
     <footer>이 화면은 팀 통합용 샘플입니다. 완전한 Mermaid 렌더러나 최종 UI가 아닙니다.</footer>

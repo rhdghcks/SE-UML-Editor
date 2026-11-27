@@ -35,7 +35,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .resize-handle { cursor: nwse-resize; }
 .bend-handle { cursor: move; }
 .diagram-svg:focus { outline: 2px solid #c2d6ff; outline-offset: -2px; }
-.selection-bar { padding: 12px; justify-content: flex-start; border-top: 1px solid #e2e6ee; font-size: 13px; min-height: 54px; }
+.selection-bar { padding: 12px; justify-content: flex-start; border-bottom: 1px solid #e2e6ee; font-size: 13px; min-height: 54px; }
 .swatch { width: 27px; height: 27px; border: 1px solid #9ea8b9; padding: 0; }
 footer { padding-top: 14px; color: #657187; font-size: 12px; }
 @media (max-width: 1000px) { .workspace { grid-template-columns: 1fr; } .code-input-area { min-height: 280px; } }
