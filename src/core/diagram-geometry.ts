@@ -98,17 +98,74 @@ export function canvasEdges(document: DiagramDocument): CanvasEdge[] {
   const routes = readRoutes(document.source);
   if (model.kind === 'class') {
     const keys = routeKeys(model.relations);
+
+    //시작점, 끝점, 상자 넓이를 통해 상자 테두리 교차점을 연산
+    //시작점과 끝점이 같은 경우 시작점 리턴
+    function calculateIntersection(
+      startX: number, startY: number,
+      endX: number, endY: number,
+      width: number, height: number
+    ) {
+      const dx = endX - startX;
+      const dy = endY - startY;
+
+      if (dx == 0 && dy == 0) {
+        return {
+          x: startX,
+          y: startY
+        }
+      }
+
+      const px = dx != 0 ? Math.abs(width / dx) : Infinity;
+      const py = dy != 0 ? Math.abs(height / dy) : Infinity;
+      const t = Math.min(px, py);
+      const safeT = Number.isFinite(t) ? t : 0;
+      return {
+        x: startX + dx / 2 * safeT,
+        y: startY + dy / 2 * safeT
+      }
+    }
+
     return model.relations.flatMap((edge, index) => {
       const a = layout[edge.from], b = layout[edge.to];
       if (!a || !b) return [];
+
+      const startX = a.x + a.width / 2;
+      const startY = a.y + a.height / 2;
+
+      const endX = b.x + b.width / 2;
+      const endY = b.y + b.height / 2;
+
+      const nowRoute = routes.get(keys[index]);
+      const hasRoute = nowRoute && nowRoute.length > 0;
+
+      const firstRoute = hasRoute ? nowRoute[0] : { x: endX, y: endY };
+      const lastRoute = hasRoute ? nowRoute[nowRoute.length - 1] : { x: startX, y: startY };
+
+      const startPoint = calculateIntersection(
+        startX, startY,
+        firstRoute.x, firstRoute.y,
+        a.width, a.height
+      );
+
+      const endPoint = calculateIntersection(
+        endX, endY,
+        lastRoute.x, lastRoute.y,
+        b.width, b.height
+      );
+
       return [{
         key: keys[index], label: edge.label, from: edge.from, to: edge.to,
-        points: [{ x: a.x + a.width / 2, y: a.y + a.height / 2 },
-        ...(routes.get(keys[index]) ?? []), { x: b.x + b.width / 2, y: b.y + b.height / 2 }],
+        points: [
+          startPoint,
+          ...(routes.get(keys[index]) ?? []),
+          endPoint
+        ],
         style: getEdgeStyle_ClassDiagram(edge.connector)
       }];
     });
   }
+
   const keys = sequenceRouteKeys(model.steps);
   const positions = sequenceRowPositions(document);
   const offsets = readSequenceOffsets(document.source);
