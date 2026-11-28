@@ -1,11 +1,10 @@
 import { arrangeClasses } from '../adapters/elk-layout';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { GridLayout } from '../adapters/grid-layout';
 import { MermaidParser } from '../adapters/mermaid-parser';
 import { BasicMermaidParser } from '../adapters/basic-mermaid-parser';
 import { loadMermaidRuntime } from '../adapters/mermaid-runtime';
 import { DiagramStore } from '../core/diagram-store';
-import { useRef } from 'react';
 import { MermaidPreview } from './MermaidPreview';
 import { MermaidRenderer } from '../adapters/mermaid-renderer';
 import { LocalFileManager } from '../adapters/local-file-manager';
@@ -219,10 +218,7 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
   }, [dirty]);
 
 
-  const errorLine = snapshot.error ?
-    Number(snapshot.error.match(/^(\d+)행:/)?.[1]) || null
-    : null;
-
+  //코드 영역 좌측에 줄 표시 스크롤 동기화
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineNumbersRef = useRef<HTMLDivElement>(null);
   const syncScroll = () => {
@@ -233,6 +229,36 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
     lineNumbersRef.current.style.transform =
       `translateY(${-textarea.scrollTop}px)`;
   };
+  //에러 줄 번호 추출
+  const errorLine = snapshot.error ?
+    Number(snapshot.error.match(/^(\d+)행:/)?.[1]) || null
+    : null;
+
+  //코드 영역에서 커서 위치 저장
+  const selectionRef = useRef<{
+    start: number;
+    end: number;
+    direction: 'forward' | 'backward' | 'none';
+  } | null>(null);
+
+  //const composing = useRef(false);
+  //const [compositionTick, setCompositionTick] = useState(0);
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    const selection = selectionRef.current;
+
+    if (!textarea || !selection) return;
+    if (document.activeElement !== textarea) return;
+
+    textarea.setSelectionRange(
+      selection.start,
+      selection.end,
+      selection.direction
+    );
+  }, [snapshot.source]);
+
+
 
   return <main className="app">
     <header className="app-header">
@@ -307,10 +333,25 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
             </div>
           </div>
           <textarea className="code-input-area"
+            aria-label="Mermaid 코드"
             ref={textareaRef}
-            spellCheck="false" aria-label="Mermaid 코드"
-            value={snapshot.source} onBlur={() => { typing.current.lastInput = -Infinity; }}
-            onChange={(event) => editCode(event.target.value)}
+            spellCheck="false"
+            value={snapshot.source}
+            onBlur={() => {
+              typing.current.lastInput = -Infinity;
+              selectionRef.current = null;
+            }}
+            onChange={(event) => {
+              const textarea = event.currentTarget;
+
+              selectionRef.current = {
+                start: textarea.selectionStart,
+                end: textarea.selectionEnd,
+                direction: textarea.selectionDirection
+              };
+
+              editCode(textarea.value);
+            }}
             onScroll={syncScroll} />
         </div>
         <div className={snapshot.error ? 'feedback error' : 'feedback'}>
