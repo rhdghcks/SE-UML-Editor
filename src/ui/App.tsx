@@ -32,7 +32,9 @@ const CLASS_EXAMPLE = `classDiagram
   User2 --> Session5
   User2 -- Session6
   User2 ..> Session7
-  User2 ..|> Session8`;
+  User2 ..|> Session8
+  
+  Session2 --> Session2`;
 
 const SEQUENCE_EXAMPLE = `sequenceDiagram
 participant User

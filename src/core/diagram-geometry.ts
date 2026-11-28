@@ -96,6 +96,8 @@ function sequenceContentTop(layout: LayoutMap): number {
 export function canvasEdges(document: DiagramDocument): CanvasEdge[] {
   const { model, layout } = document;
   const routes = readRoutes(document.source);
+
+  //클래스 다이어그램
   if (model.kind === 'class') {
     const keys = routeKeys(model.relations);
 
@@ -137,10 +139,21 @@ export function canvasEdges(document: DiagramDocument): CanvasEdge[] {
       const endY = b.y + b.height / 2;
 
       const nowRoute = routes.get(keys[index]);
-      const hasRoute = nowRoute && nowRoute.length > 0;
+      const routePoints = (nowRoute && nowRoute.length)
+        ? nowRoute
+        : edge.from === edge.to
+          ? [
+            { x: startX + a.width, y: startY },
+            { x: startX + a.width, y: startY + a.height },
+            { x: startX, y: startY + a.height }
+          ]
+          : [];
 
-      const firstRoute = hasRoute ? nowRoute[0] : { x: endX, y: endY };
-      const lastRoute = hasRoute ? nowRoute[nowRoute.length - 1] : { x: startX, y: startY };
+
+      const hasRoute = routePoints && routePoints.length > 0;
+
+      const firstRoute = hasRoute ? routePoints[0] : { x: endX, y: endY };
+      const lastRoute = hasRoute ? routePoints[routePoints.length - 1] : { x: startX, y: startY };
 
       const startPoint = calculateIntersection(
         startX, startY,
@@ -158,7 +171,7 @@ export function canvasEdges(document: DiagramDocument): CanvasEdge[] {
         key: keys[index], label: edge.label, from: edge.from, to: edge.to,
         points: [
           startPoint,
-          ...(routes.get(keys[index]) ?? []),
+          ...(routePoints ?? []),
           endPoint
         ],
         style: getEdgeStyle_ClassDiagram(edge.connector)
@@ -166,26 +179,62 @@ export function canvasEdges(document: DiagramDocument): CanvasEdge[] {
     });
   }
 
-  const keys = sequenceRouteKeys(model.steps);
-  const positions = sequenceRowPositions(document);
-  const offsets = readSequenceOffsets(document.source);
-  let message = 0;
-  return sequenceRows(model.steps).flatMap((row, index) => {
-    if (!row.from || !row.to) return [];
-    const key = keys[message++];
-    const a = layout[row.from], b = layout[row.to];
-    if (!a || !b) return [];
-    const y = positions[index];
-    return [{
-      key, label: row.text, from: row.from, to: row.to,
-      sequence: {
-        offsetY: y - firstSequenceRow(layout) - index * 65, storedOffsetY: offsets.get(key) ?? 0,
-        minY: index ? positions[index - 1] + 24 : sequenceContentTop(layout)
-      },
-      points: [{ x: a.x + a.width / 2, y }, ...(routes.get(key) ?? []), { x: b.x + b.width / 2, y }],
-      style: getEdgeStyle_SequenceDiagram((row.arrow ?? '->>') as MessageArrow)
-    }];
-  });
+  //시퀸스 다이어그램
+  else if (model.kind === 'sequence') {
+    const keys = sequenceRouteKeys(model.steps);
+    const positions = sequenceRowPositions(document);
+    const offsets = readSequenceOffsets(document.source);
+    let message = 0;
+
+    const selfX = 35;
+    const selfY = 25;
+
+    return sequenceRows(model.steps).flatMap((row, index) => {
+      if (!row.from || !row.to) return [];
+      const key = keys[message++];
+      const a = layout[row.from], b = layout[row.to];
+      if (!a || !b) return [];
+      const y = positions[index];
+
+      const centerX = a.x + a.width / 2;
+      const isSelfMessage = row.from === row.to;
+
+      const nowRoute = routes.get(key) ?? [];
+
+      const routePoints = nowRoute.length ?
+        nowRoute
+        : isSelfMessage ?
+          [
+            { x: centerX + selfX, y },
+            { x: centerX + selfX, y: y + selfY },
+          ] : [];
+
+      const points = isSelfMessage ?
+        [
+          { x: centerX, y },
+          ...routePoints,
+          { x: centerX, y: y + selfY },
+        ]
+        : [
+          { x: centerX, y },
+          ...routePoints,
+          { x: b.x + b.width / 2, y },
+        ];
+
+      return [{
+        key, label: row.text, from: row.from, to: row.to,
+        sequence: {
+          offsetY: y - firstSequenceRow(layout) - index * 65, storedOffsetY: offsets.get(key) ?? 0,
+          minY: index ? positions[index - 1] + 24 : sequenceContentTop(layout)
+        },
+        points: points,
+        style: getEdgeStyle_SequenceDiagram((row.arrow ?? '->>') as MessageArrow)
+      }];
+    });
+  }
+
+  //미지원 다이어그램 유형
+  else throw new Error('지원하지 않는 다이어그램 유형입니다.');
 }
 
 export function nearestPoint(point: BendPoint, a: BendPoint, b: BendPoint): BendPoint {
