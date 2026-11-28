@@ -45,7 +45,7 @@ function setup(source = classSource(), options: Options = {}) {
     const document = useSyncExternalStore(store.subscribe, store.getSnapshot);
     const [selected, setSelected] = useState<string | null>(null);
     return <DiagramCanvas document={document} disabled={options.disabled ?? false}
-      selected={selected} onSelect={setSelected} onMove={store.moveNode} onResize={store.resizeNode}
+      onMove={store.moveNode} onResize={store.resizeNode}
       onRouteChange={(key, points, offsetY) => {
         if (options.failRoute) throw new Error('간선을 바꿀 수 없습니다.');
         let source = writeRoute(store.getSnapshot().source, key, points);
@@ -54,7 +54,8 @@ function setup(source = classSource(), options: Options = {}) {
       }}
       onError={message => { if (message) errors.push(message); }}
       onInteractionStart={() => { releases.begun++; return () => { releases.released++; }; }}
-      snapNode={options.snap ?? (point => point)} />;
+      snapNode={options.snap ?? (point => point)}
+      onChangeNodeColor={store.setNodeColor}/>;
   }
   const view = render(<Harness />);
   const svg = view.container.querySelector<SVGSVGElement>('svg.diagram-svg')!;

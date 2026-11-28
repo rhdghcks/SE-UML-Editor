@@ -16,8 +16,8 @@ export class CanvasSvgRenderer implements IRenderer<string> {
     const { renderToStaticMarkup } = await import('react-dom/server');
     const noop = () => {};
     const page = renderToStaticMarkup(createElement(DiagramCanvas, {
-      document, disabled: true, selected: null, onSelect: noop, onMove: noop, onResize: noop,
-      onRouteChange: noop, onError: noop, onInteractionStart: () => noop, snapNode: point => point,
+      document, disabled: true, onMove: noop, onResize: noop,
+      onRouteChange: noop, onError: noop, onInteractionStart: () => noop, snapNode: point => point, onChangeNodeColor: noop
     }));
     // 캔버스는 편집 도구 버튼과 SVG를 함께 그린다. 그림인 <svg>만 내보낸다.
     const markup = /<svg[\s\S]*<\/svg>/.exec(page)?.[0];

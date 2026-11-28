@@ -1,11 +1,10 @@
 import { arrangeClasses } from '../adapters/elk-layout';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { GridLayout } from '../adapters/grid-layout';
 import { MermaidParser } from '../adapters/mermaid-parser';
 import { BasicMermaidParser } from '../adapters/basic-mermaid-parser';
 import { loadMermaidRuntime } from '../adapters/mermaid-runtime';
 import { DiagramStore } from '../core/diagram-store';
-import { useRef } from 'react';
 import { MermaidPreview } from './MermaidPreview';
 import { MermaidRenderer } from '../adapters/mermaid-renderer';
 import { LocalFileManager } from '../adapters/local-file-manager';
@@ -25,27 +24,39 @@ const CLASS_EXAMPLE = `classDiagram
     +name: string
     +login()
   }
-  class Session
-  User --> Session : creates`;
+  User <|-- Session1
+  User --|> Session2
+  User *-- Session3
+  User o-- Session4
+
+  User2 --> Session5
+  User2 -- Session6
+  User2 ..> Session7
+  User2 ..|> Session8
+  
+  Session2 --> Session2`;
 
 const SEQUENCE_EXAMPLE = `sequenceDiagram
-  participant User
-  participant Server
-  User->>Server: login()
-  activate Server
-  Server-->>User: token
-  deactivate Server
-  alt valid token
-    User->>Server: getProfile()
-  else expired
-    Server-->>User: unauthorized
-  end`;
+participant User
+participant Server
+
+User->>Server: login()
+activate Server
+Server-->>User: token
+deactivate Server
+
+alt valid token
+  User --> Server: getProfile()
+else expired
+  Server -> User: unauthorized
+end
+User -> User : ee
+Server --> Server : ff`;
 
 const snap: AlignmentSnap = new AlignmentSnap(() => store.getSnapshot());
 const interaction = new LayoutInteraction();
 const store: DiagramStore = new DiagramStore(new MermaidParser(new BasicMermaidParser(), await loadMermaidRuntime()), new GridLayout(), SEQUENCE_EXAMPLE, snap,
   (model, boxes, added) => interaction.complete(arrangeClasses(model, boxes, added)));
-const COLORS = ['#000000', '#ffffff', '#e8eefb', '#dff2e5', '#fff0ce', '#f9dfdf', '#e9ddf7'];
 
 const defaultFiles = new LocalFileManager();
 const renderer = new MermaidRenderer();
@@ -64,8 +75,6 @@ interface AppProps {
 
 export function App({ exporter = defaultExporter, saveImage = saveBlob, files = defaultFiles }: AppProps = {}) {
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-  const [selected, setSelected] = useState<string | null>(null);
-  const currentNode = selected ? snapshot.layout[selected] : undefined;
 
   const [nodeName, setNodeName] = useState('');
   const [standard, setStandard] = useState(false);
@@ -96,7 +105,6 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
   const opened = () => {
     documentGeneration.current++;
     files.reset?.();
-    setSelected(null);
     setSavedSource(store.getSnapshot().source);
   };
   const openExample = (source: string) => {
@@ -211,6 +219,49 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
 
+
+  //코드 영역 좌측에 줄 표시 스크롤 동기화
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lineNumbersRef = useRef<HTMLDivElement>(null);
+  const syncScroll = () => {
+    const textarea = textareaRef.current;
+
+    if (!textarea || !lineNumbersRef.current) return;
+
+    lineNumbersRef.current.style.transform =
+      `translateY(${-textarea.scrollTop}px)`;
+  };
+  //에러 줄 번호 추출
+  const errorLine = snapshot.error ?
+    Number(snapshot.error.match(/^(\d+)행:/)?.[1]) || null
+    : null;
+
+  //코드 영역에서 커서 위치 저장
+  const selectionRef = useRef<{
+    start: number;
+    end: number;
+    direction: 'forward' | 'backward' | 'none';
+  } | null>(null);
+
+  //const composing = useRef(false);
+  //const [compositionTick, setCompositionTick] = useState(0);
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    const selection = selectionRef.current;
+
+    if (!textarea || !selection) return;
+    if (document.activeElement !== textarea) return;
+
+    textarea.setSelectionRange(
+      selection.start,
+      selection.end,
+      selection.direction
+    );
+  }, [snapshot.source]);
+
+
+
   return <main className="app">
     <header className="app-header">
       <div>
@@ -273,9 +324,38 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
     <div className="workspace">
       <section className="code-panel">
         <div className="panel-heading">Mermaid 코드</div>
-        <textarea spellCheck="false" aria-label="Mermaid 코드"
-          value={snapshot.source} onBlur={() => { typing.current.lastInput = -Infinity; }}
-          onChange={(event) => editCode(event.target.value)} />
+        <div className="code-editor">
+          <div className="line-numbers" aria-hidden="true">
+            <div ref={lineNumbersRef}>
+              {snapshot.source.split('\n').map((_, index) => (
+                <div key={index} className={errorLine === index + 1 ? 'error-line' : ''}>
+                  {index + 1}
+                </div>
+              ))}
+            </div>
+          </div>
+          <textarea className="code-input-area"
+            aria-label="Mermaid 코드"
+            ref={textareaRef}
+            spellCheck="false"
+            value={snapshot.source}
+            onBlur={() => {
+              typing.current.lastInput = -Infinity;
+              selectionRef.current = null;
+            }}
+            onChange={(event) => {
+              const textarea = event.currentTarget;
+
+              selectionRef.current = {
+                start: textarea.selectionStart,
+                end: textarea.selectionEnd,
+                direction: textarea.selectionDirection
+              };
+
+              editCode(textarea.value);
+            }}
+            onScroll={syncScroll} />
+        </div>
         <div className={snapshot.error ? 'feedback error' : 'feedback'}>
           {snapshot.error ?? '코드가 유효합니다. 캔버스에서 노드를 드래그해 보세요.'}
         </div>
@@ -283,19 +363,11 @@ export function App({ exporter = defaultExporter, saveImage = saveBlob, files = 
       <section className="canvas-panel">
         <div className="panel-heading">캔버스 (개발용 미리보기)</div>
         {standard ? <MermaidPreview document={snapshot} renderer={renderer} /> : <DiagramCanvas document={snapshot} disabled={Boolean(snapshot.error)}
-          selected={selected} onSelect={setSelected} onMove={store.moveNode} onResize={store.resizeNode}
+          onMove={store.moveNode} onResize={store.resizeNode}
           onRouteChange={updateRoute} onError={setFileError}
           onInteractionStart={() => interaction.begin()}
-          snapNode={(point, id) => snap.snap(point, id, store.getSnapshot().layout)} />}
-        <div className="selection-bar">
-          {selected && currentNode ? <>
-            <span>선택: {selected}</span>
-            <span>색상</span>
-            {COLORS.map((color) => <button key={color} className="swatch"
-              title={color} style={{ backgroundColor: color }} disabled={Boolean(snapshot.error)}
-              onClick={() => store.setNodeColor(selected, color)} />)}
-          </> : <span>노드를 선택하면 색상을 바꿀 수 있습니다.</span>}
-        </div>
+          snapNode={(point, id) => snap.snap(point, id, store.getSnapshot().layout)}
+          onChangeNodeColor={store.setNodeColor} />}
       </section>
     </div>
     <footer>이 화면은 팀 통합용 샘플입니다. 완전한 Mermaid 렌더러나 최종 UI가 아닙니다.</footer>
